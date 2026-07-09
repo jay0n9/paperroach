@@ -5,6 +5,7 @@ from io import StringIO
 from pathlib import Path
 
 from kb import organize
+from kb.config import Config
 
 
 def _moc_path(folder: Path) -> Path:
@@ -19,6 +20,70 @@ def _write_moc(folder: Path, body: str) -> Path:
 
 
 class OrganizeTests(unittest.TestCase):
+    def test_apply_moves_adds_missing_subject_to_generated_note(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = Config(vault_path=root, kb_dir=".kb")
+            note = config.knowledge_library_path / "Old" / "Concept.md"
+            note.parent.mkdir(parents=True, exist_ok=True)
+            note.write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "Type:",
+                        "- Concept",
+                        "kb-generated: true",
+                        "---",
+                        "# Concept",
+                        "",
+                        "Body.",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            moved = organize.apply_moves([(note, "Old", "New Domain")], config)
+
+            dest = config.knowledge_library_path / "New Domain" / "Concept.md"
+            self.assertEqual(moved, 1)
+            self.assertFalse(note.exists())
+            self.assertTrue(dest.exists())
+            text = dest.read_text(encoding="utf-8")
+            self.assertIn("Subject: New Domain", text)
+            self.assertIn("Body.", text)
+
+    def test_apply_moves_updates_lowercase_subject_without_duplicate(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = Config(vault_path=root, kb_dir=".kb")
+            note = config.knowledge_library_path / "Old" / "Concept.md"
+            note.parent.mkdir(parents=True, exist_ok=True)
+            note.write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "Type:",
+                        "- Concept",
+                        "subject: Old",
+                        "kb-generated: true",
+                        "---",
+                        "# Concept",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            moved = organize.apply_moves([(note, "Old", "New Domain")], config)
+
+            dest = config.knowledge_library_path / "New Domain" / "Concept.md"
+            text = dest.read_text(encoding="utf-8")
+            self.assertEqual(moved, 1)
+            self.assertIn("Subject: New Domain", text)
+            self.assertNotIn("subject: Old", text)
+            self.assertEqual(text.lower().count("subject:"), 1)
+
     def test_write_moc_replaces_single_managed_block(self):
         with tempfile.TemporaryDirectory() as td:
             folder = Path(td) / "Computer Science"

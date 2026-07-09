@@ -387,8 +387,14 @@ def _update_subject(path: Path, subject: str) -> None:
     fm_text, body = split_frontmatter(text)
     if fm_text is None:
         return
-    new_fm = re.sub(
-        r"^Subject:.*$", f"Subject: {subject}", fm_text, count=1, flags=re.MULTILINE
+    new_fm, replacements = re.subn(
+        r"^Subject\s*:.*$",
+        f"Subject: {subject}",
+        fm_text,
+        count=1,
+        flags=re.IGNORECASE | re.MULTILINE,
     )
+    if replacements == 0:
+        new_fm = fm_text.rstrip() + f"\nSubject: {subject}"
     if new_fm != fm_text:
         path.write_text(f"---\n{new_fm}\n---\n{body}", encoding="utf-8")
