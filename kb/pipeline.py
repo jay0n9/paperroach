@@ -146,11 +146,17 @@ def _load_hash_ledger(config: Config) -> dict[str, str]:
 
 
 def _save_hash_ledger(config: Config, ledger: dict[str, str]) -> None:
+    path = _hash_ledger_path(config)
+    tmp = path.with_name(f".{path.name}.tmp")
     try:
-        _hash_ledger_path(config).write_text(
-            json.dumps(ledger, indent=1), encoding="utf-8"
-        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(ledger, indent=1), encoding="utf-8")
+        os.replace(tmp, path)
     except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
         pass
 
 

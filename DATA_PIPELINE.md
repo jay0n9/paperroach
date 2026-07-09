@@ -550,6 +550,9 @@ Used for:
 - avoiding duplicate Zotero attachments
 - `content_hashes.json`
 
+The hash ledger is written through a temporary file and atomic replace, so a
+failed save keeps the previous valid JSON file instead of truncating it.
+
 ### `concept_id`
 
 Defined in `kb/knowledge.py`.
