@@ -35,6 +35,28 @@ def _existing_note_text(my_notes: str) -> str:
 
 
 class ObsidianNoteTests(unittest.TestCase):
+    def test_is_generated_note_parses_frontmatter_flags_conservatively(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            cases = {
+                "bool_true.md": ("true", True),
+                "quoted_true.md": ('"true"', True),
+                "quoted_false.md": ('"false"', False),
+                "quoted_no.md": ('"no"', False),
+                "one.md": ("1", True),
+                "zero.md": ("0", False),
+            }
+
+            for name, (value, expected) in cases.items():
+                with self.subTest(name=name):
+                    note = root / name
+                    note.write_text(
+                        f"---\nkb-generated: {value}\n---\n# Note\n",
+                        encoding="utf-8",
+                    )
+
+                    self.assertEqual(obsidian.is_generated_note(note), expected)
+
     def test_existing_my_notes_preserves_subheadings_and_horizontal_rules(self):
         with tempfile.TemporaryDirectory() as td:
             note = Path(td) / "Existing Paper.md"

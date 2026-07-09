@@ -28,14 +28,22 @@ class PipelineInputTests(unittest.TestCase):
                 generated,
                 "\n".join(["---", "kb-generated: true", "---", "# Generated", ""]),
             )
+            user_note = source / "UserNote.MD"
+            _write(
+                user_note,
+                "\n".join(["---", 'kb-generated: "false"', "---", "# User note", ""]),
+            )
 
             top_level = collect_inputs([source], config, recursive=False)
             recursive = collect_inputs([source, config.kb_path], config, recursive=True)
 
-            self.assertEqual({p.name for p in top_level}, {"Paper.PDF", "Note.MD"})
+            self.assertEqual(
+                {p.name for p in top_level},
+                {"Paper.PDF", "Note.MD", "UserNote.MD"},
+            )
             self.assertEqual(
                 {p.name for p in recursive},
-                {"Paper.PDF", "Note.MD", "Nested.MarkDown"},
+                {"Paper.PDF", "Note.MD", "Nested.MarkDown", "UserNote.MD"},
             )
 
 

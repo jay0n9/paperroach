@@ -175,7 +175,10 @@ def _dedupe_against(name: str, refs_root: Path, source_path: Path) -> str:
 
 def _is_our_note_for(path: Path, source_path: Path) -> bool:
     fm = _read_frontmatter(path)
-    return bool(fm.get("kb-generated")) and fm.get("kb-source") == str(source_path)
+    return (
+        _frontmatter_flag(fm.get("kb-generated"))
+        and fm.get("kb-source") == str(source_path)
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -553,4 +556,15 @@ def _decode_tolerant(raw: bytes) -> str:
 
 def is_generated_note(path: Path) -> bool:
     """True if ``path`` is a note this pipeline produced (skip on re-ingest)."""
-    return bool(_read_frontmatter(path).get("kb-generated"))
+    return _frontmatter_flag(_read_frontmatter(path).get("kb-generated"))
+
+
+def _frontmatter_flag(value) -> bool:
+    """Parse a YAML frontmatter flag conservatively."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value == 1
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
