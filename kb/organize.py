@@ -342,14 +342,31 @@ def _write_moc(folder: Path, note_names: list[str], sub_mocs: list[str]) -> bool
 
     if moc_path.exists():
         text = _read_text_tolerant(moc_path)
-        if _MOC_START in text and _MOC_END in text:
-            new = re.sub(
-                re.escape(_MOC_START) + r".*?" + re.escape(_MOC_END),
+        start_count = text.count(_MOC_START)
+        end_count = text.count(_MOC_END)
+        if start_count == 1 and end_count == 1:
+            pattern = re.escape(_MOC_START) + r".*?" + re.escape(_MOC_END)
+            new, replacements = re.subn(
+                pattern,
                 lambda _m: block,
                 text,
                 count=1,
                 flags=re.DOTALL,
             )
+            if replacements != 1:
+                print(
+                    f"  ! MOC block in '{moc_path.name}' has markers out of "
+                    "order; skipping update.",
+                    flush=True,
+                )
+                return False
+        elif start_count or end_count:
+            print(
+                f"  ! MOC block in '{moc_path.name}' has {start_count} start "
+                f"marker(s) and {end_count} end marker(s); skipping update.",
+                flush=True,
+            )
+            return False
         else:
             new = text.rstrip() + f"\n\n{block}\n"
         if new == text:
