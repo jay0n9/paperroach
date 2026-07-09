@@ -193,9 +193,11 @@ The classifier combines:
 - Frontmatter persistence through `Domain`, `Secondary Domains`,
   `Subdomain`, `Contribution Type`, and `Methods`.
 
-Subdomain filing is metadata-first: explicit `Subdomain` frontmatter wins, then
-metadata hints such as tags, venue, DOI/source URL, and title are used before
-the generated note body is inspected.
+Subdomain filing is metadata-first: explicit `Subdomain` frontmatter or Zotero
+`Extra` hints win, then metadata hints such as tags, venue, DOI/source URL, and
+title are used before the generated note body is inspected. In Zotero `Extra`,
+use lines such as `PaperRoach Domain: HCI` and
+`PaperRoach Subdomain: Health & Wellbeing` for explicit control.
 
 ## Zotero Watcher
 
@@ -217,7 +219,8 @@ watchers from racing on the same store.
 
 When a PDF is a Zotero attachment, PaperRoach reads bibliographic fields from
 `zotero.sqlite` in read-only mode: title, authors, year, tags, URL, venue,
-item type, DOI, volume, issue, pages, and publisher.
+item type, DOI, volume, issue, pages, publisher, and explicit `Domain` /
+`Subdomain` hints from Zotero `Extra`.
 
 ## Query
 

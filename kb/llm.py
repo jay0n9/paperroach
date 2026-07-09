@@ -339,12 +339,22 @@ def classify_paper(
     obj = client.generate_json(system, "\n\n".join(parts))
     fallback_text = "\n".join(parts)
     metadata_text = classification_metadata_text(metadata)
-    return _coerce_classification(obj, candidates, fallback_text, metadata_text)
+    metadata_primary, metadata_subdomain = metadata_classification(metadata, candidates)
+    return _coerce_classification(
+        obj,
+        candidates,
+        fallback_text,
+        metadata_text,
+        metadata_primary,
+        metadata_subdomain,
+    )
 
 
 def classification_metadata_text(metadata: PaperMetadata) -> str:
     """Metadata-only classification signal, evaluated before model/body cues."""
     pieces = [
+        metadata.primary_domain,
+        metadata.subdomain,
         metadata.title,
         " ".join(metadata.tags),
         metadata.summary,
@@ -362,14 +372,65 @@ def classification_metadata_text(metadata: PaperMetadata) -> str:
     return "\n".join(str(piece) for piece in pieces if piece)
 
 
+def metadata_classification(
+    metadata: PaperMetadata, candidates: list[str] | None = None
+) -> tuple[str, str]:
+    """Return the strongest metadata-derived (domain, subdomain) pair.
+
+    Explicit structured metadata fields win first. If they are absent, fall
+    back to taxonomy cues in bibliographic metadata such as tags, venue, DOI,
+    source URL, and title.
+    """
+    explicit_domain = taxonomy.normalize_domain(metadata.primary_domain, candidates)
+    explicit_subdomain = taxonomy.normalize_subdomain(
+        metadata.subdomain, explicit_domain
+    )
+    if explicit_subdomain:
+        parent = taxonomy.domain_for_subdomain(explicit_subdomain)
+        if parent:
+            return taxonomy.normalize_domain(parent, candidates), explicit_subdomain
+        if explicit_domain:
+            return explicit_domain, explicit_subdomain
+
+    metadata_text = classification_metadata_text(metadata)
+    if explicit_domain:
+        subdomain = taxonomy.classify_subdomain_heuristic(metadata_text, explicit_domain)
+        return explicit_domain, subdomain
+
+    domain, subdomain = taxonomy.classify_subdomain_any(metadata_text)
+    if domain and subdomain:
+        return taxonomy.normalize_domain(domain, candidates), subdomain
+    return "", ""
+
+
 def _s(value) -> str:
     return str(value or "").strip()
 
 
 def _coerce_classification(
-    obj: dict, candidates: list[str], fallback_text: str, metadata_text: str = ""
+    obj: dict,
+    candidates: list[str],
+    fallback_text: str,
+    metadata_text: str = "",
+    metadata_primary: str = "",
+    metadata_subdomain: str = "",
 ) -> PaperClassification:
-    metadata_domain, metadata_subdomain = taxonomy.classify_subdomain_any(metadata_text)
+    metadata_domain = taxonomy.normalize_domain(metadata_primary, candidates)
+    metadata_subdomain = taxonomy.normalize_subdomain(
+        metadata_subdomain, metadata_domain
+    )
+    if metadata_domain and not metadata_subdomain and metadata_text:
+        metadata_subdomain = taxonomy.classify_subdomain_heuristic(
+            metadata_text, metadata_domain
+        )
+    if not metadata_domain:
+        inferred_domain, inferred_subdomain = taxonomy.classify_subdomain_any(
+            metadata_text
+        )
+        if inferred_domain:
+            metadata_domain = taxonomy.normalize_domain(inferred_domain, candidates)
+        if not metadata_subdomain and inferred_subdomain:
+            metadata_subdomain = inferred_subdomain
     primary = ""
     subdomain = ""
     if metadata_domain and metadata_subdomain:

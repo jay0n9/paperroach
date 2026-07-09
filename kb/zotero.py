@@ -26,6 +26,11 @@ from kb.models import PaperMetadata
 
 _DATADIR_RE = re.compile(r'extensions\.zotero\.dataDir",\s*"(.*?)"')
 _YEAR_RE = re.compile(r"\b(1[5-9]\d{2}|20\d{2})\b")
+_EXTRA_CLASS_RE = re.compile(
+    r"^\s*(?:paperroach[\s_-]*)?(?:primary\s+)?"
+    r"(?P<key>domain|subdomain)\s*[:=]\s*(?P<value>.+?)\s*$",
+    re.IGNORECASE,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -202,6 +207,8 @@ def read_metadata(data_dir: Path, pdf_path: Path) -> dict | None:
         issue = _field(cur, target, "issue")
         pages = _field(cur, target, "pages")
         publisher = _field(cur, target, "publisher")
+        extra = _field(cur, target, "extra")
+        classification = _classification_from_extra(extra)
         venue = _first_field(
             cur,
             target,
@@ -217,9 +224,11 @@ def read_metadata(data_dir: Path, pdf_path: Path) -> dict | None:
             ],
         )
 
-        if not (title or authors or year or tags or url or venue or doi):
+        if not (
+            title or authors or year or tags or url or venue or doi or classification
+        ):
             return None
-        return {
+        out = {
             "title": title,
             "authors": authors,
             "year": year,
@@ -233,6 +242,8 @@ def read_metadata(data_dir: Path, pdf_path: Path) -> dict | None:
             "pages": pages,
             "publisher": publisher,
         }
+        out.update(classification)
+        return out
     except sqlite3.Error:
         return None
     finally:
@@ -279,6 +290,29 @@ def _clean_tag(tag: str) -> str:
     return tag.strip("-")
 
 
+def _classification_from_extra(extra: str | None) -> dict[str, str]:
+    """Parse explicit PaperRoach classification hints from Zotero Extra.
+
+    Supported lines:
+    ``Domain: HCI``, ``Primary Domain = Computer Science``,
+    ``Subdomain: Computer Graphics``, and
+    ``PaperRoach Subdomain: VR/AR Interaction``.
+    """
+    out: dict[str, str] = {}
+    for line in str(extra or "").splitlines():
+        m = _EXTRA_CLASS_RE.match(line)
+        if not m:
+            continue
+        value = m.group("value").strip()
+        if not value:
+            continue
+        if m.group("key").lower() == "domain":
+            out["primary_domain"] = value
+        else:
+            out["subdomain"] = value
+    return out
+
+
 def enrich(metadata: PaperMetadata, source_path: Path, config: Config) -> PaperMetadata:
     """Override metadata fields with Zotero's, when available. Best-effort."""
     if not config.zotero_enrich:
@@ -318,4 +352,8 @@ def enrich(metadata: PaperMetadata, source_path: Path, config: Config) -> PaperM
         metadata.pages = info["pages"]
     if info.get("publisher"):
         metadata.publisher = info["publisher"]
+    if info.get("primary_domain"):
+        metadata.primary_domain = info["primary_domain"]
+    if info.get("subdomain"):
+        metadata.subdomain = info["subdomain"]
     return metadata

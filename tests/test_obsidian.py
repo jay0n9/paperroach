@@ -115,6 +115,37 @@ class ObsidianNoteTests(unittest.TestCase):
             self.assertIn("Fresh generated summary.", rendered)
             self.assertNotIn("Old summary.", rendered)
 
+    def test_metadata_classification_controls_location_and_frontmatter(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            doc = Document(
+                doc_id="abc123abc123",
+                source_path=root / "paper.pdf",
+                kind="pdf",
+                markdown="",
+                metadata=PaperMetadata(
+                    title="Metadata Classified Paper",
+                    year=2024,
+                    primary_domain="HCI",
+                    subdomain="Health & Wellbeing",
+                ),
+            )
+            config = Config(vault_path=root, references_dir="References", kb_dir=".kb")
+
+            obsidian.assign_note_location(doc, config)
+            rendered = obsidian.render_note(doc, [], config)
+
+            self.assertEqual(
+                doc.note_path,
+                root
+                / "References"
+                / "HCI"
+                / "Health & Wellbeing"
+                / "Metadata Classified Paper (2024).md",
+            )
+            self.assertIn("Domain: HCI", rendered)
+            self.assertIn("Subdomain: Health & Wellbeing", rendered)
+
     def test_update_related_in_file_preserves_surrounding_user_content(self):
         with tempfile.TemporaryDirectory() as td:
             note = Path(td) / "User Note.md"

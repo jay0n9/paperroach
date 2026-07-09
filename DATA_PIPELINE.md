@@ -26,7 +26,7 @@ Current local configuration is read from `kb.toml`.
 |---|---|---|---|
 | PDF paper | Manual `paperroach build <pdf>` or Zotero watcher | `kb/ingest.py` | Markdown text |
 | Markdown note | Manual `paperroach build <md>` | `kb/ingest.py` | Original note text |
-| Zotero metadata | Zotero SQLite DB | `kb/zotero.py` | Better title, authors, year, tags, URL, venue, DOI |
+| Zotero metadata | Zotero SQLite DB | `kb/zotero.py` | Better title, authors, year, tags, URL, venue, DOI, Domain/Subdomain hints |
 | Existing Obsidian notes | Vault folders | `kb/obsidian.py`, `kb/knowledge.py` | Preserved user notes plus managed blocks |
 
 Supported file suffixes:
@@ -170,6 +170,8 @@ Steps:
 2. Enrich from Zotero if possible:
    - Zotero title/authors/year/tags/URL/venue/DOI/volume/issue/pages/publisher
      override LLM guesses.
+   - Explicit `Domain` / `Subdomain` hints from Zotero `Extra` are carried into
+     `PaperMetadata` before paper classification.
 
 3. Extract detailed analysis:
    - TL;DR
@@ -195,9 +197,10 @@ Steps:
    it uses AI-assisted environment generation. A core rendering or geometry
    paper can be filed under `Computer Science / Computer Graphics`.
 
-   Subdomain priority is metadata-first: explicit frontmatter is used first,
-   then metadata hints such as tags, venue, DOI/source URL, and title, and only
-   then compact body sections such as TL;DR, Approach, and Concepts.
+   Subdomain priority is metadata-first: explicit frontmatter and Zotero
+   `Extra` hints are used first, then metadata hints such as tags, venue,
+   DOI/source URL, and title, and only then compact body sections such as
+   TL;DR, Approach, and Concepts.
 
 5. Distill concept details:
    - explanation

@@ -112,6 +112,9 @@ def assign_note_location(doc: Document, config: Config) -> None:
     if doc.classification and doc.classification.primary_domain:
         subject = doc.classification.primary_domain.strip()
         subdomain = doc.classification.subdomain.strip()
+    elif doc.metadata.primary_domain:
+        subject = doc.metadata.primary_domain.strip()
+        subdomain = doc.metadata.subdomain.strip()
     elif doc.analysis:
         subject = (doc.analysis.subject or "").strip()
     folder = reference_classification_folder(config, subject, subdomain)
@@ -220,15 +223,19 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
     if meta.publisher:
         frontmatter["Publisher"] = meta.publisher
     cls = doc.classification
-    if cls and cls.primary_domain:
-        frontmatter["Domain"] = cls.primary_domain
-        if cls.subdomain:
-            frontmatter["Subdomain"] = cls.subdomain
-        if cls.secondary_domains:
+    primary_domain = (
+        cls.primary_domain if cls and cls.primary_domain else meta.primary_domain
+    )
+    subdomain = cls.subdomain if cls and cls.subdomain else meta.subdomain
+    if primary_domain:
+        frontmatter["Domain"] = primary_domain
+        if subdomain:
+            frontmatter["Subdomain"] = subdomain
+        if cls and cls.secondary_domains:
             frontmatter["Secondary Domains"] = cls.secondary_domains
-        if cls.contribution_type:
+        if cls and cls.contribution_type:
             frontmatter["Contribution Type"] = cls.contribution_type
-        if cls.methods:
+        if cls and cls.methods:
             frontmatter["Methods"] = cls.methods
     an = doc.analysis or PaperAnalysis()
     out = ["---", _dump_yaml(frontmatter).rstrip(), "---", f"# {meta.title}", "---", ""]

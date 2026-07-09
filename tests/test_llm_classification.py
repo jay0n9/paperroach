@@ -6,6 +6,44 @@ from kb.pipeline import _fallback_paper_classification
 
 
 class LLMClassificationTests(unittest.TestCase):
+    def test_explicit_metadata_subdomain_beats_model_and_metadata_cues(self):
+        metadata = PaperMetadata(
+            title="A Mixed Metadata Paper",
+            tags=["hci-study", "participant-study"],
+            venue="CHI",
+            venue_type="conferencePaper",
+            primary_domain="Computer Science",
+            subdomain="Computer Graphics",
+        )
+        metadata_text = llm.classification_metadata_text(metadata)
+
+        cls = llm._coerce_classification(
+            {"primary_domain": "HCI", "subdomain": "Health & Wellbeing"},
+            ["Computer Science", "Generative AI", "HCI", "Statistics"],
+            fallback_text="The body discusses interviews and qualitative feedback.",
+            metadata_text=metadata_text,
+            metadata_primary=metadata.primary_domain,
+            metadata_subdomain=metadata.subdomain,
+        )
+
+        self.assertEqual(cls.primary_domain, "Computer Science")
+        self.assertEqual(cls.subdomain, "Computer Graphics")
+
+    def test_explicit_metadata_subdomain_can_supply_parent_domain(self):
+        metadata = PaperMetadata(
+            title="Explicit Subdomain",
+            tags=["hci-study", "participant-study"],
+            subdomain="Computer Graphics",
+        )
+
+        self.assertEqual(
+            llm.metadata_classification(
+                metadata,
+                ["Computer Science", "Generative AI", "HCI", "Statistics"],
+            ),
+            ("Computer Science", "Computer Graphics"),
+        )
+
     def test_metadata_subdomain_beats_model_subdomain_and_body_terms(self):
         metadata = PaperMetadata(
             title="ASafePlace",
@@ -101,6 +139,26 @@ class LLMClassificationTests(unittest.TestCase):
 
         self.assertEqual(cls.primary_domain, "HCI")
         self.assertEqual(cls.subdomain, "Health & Wellbeing")
+
+    def test_pipeline_fallback_prefers_explicit_metadata_subdomain(self):
+        metadata = PaperMetadata(
+            title="Conflicting Metadata",
+            tags=["hci-study", "participant-study"],
+            primary_domain="Computer Science",
+            subdomain="Computer Graphics",
+        )
+        analysis = PaperAnalysis(
+            approach="The body focuses on interviews, therapy, and qualitative feedback."
+        )
+
+        cls = _fallback_paper_classification(
+            metadata,
+            analysis,
+            ["Computer Science", "Generative AI", "HCI", "Statistics"],
+        )
+
+        self.assertEqual(cls.primary_domain, "Computer Science")
+        self.assertEqual(cls.subdomain, "Computer Graphics")
 
 
 if __name__ == "__main__":

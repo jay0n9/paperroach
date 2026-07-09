@@ -83,6 +83,7 @@ def _make_zotero_fixture(root: Path) -> tuple[Path, Path]:
             "pages",
             "publisher",
             "conferenceName",
+            "extra",
         ]
         cur.executemany(
             "INSERT INTO fields VALUES (?, ?)",
@@ -98,6 +99,11 @@ def _make_zotero_fixture(root: Path) -> tuple[Path, Path]:
             "pages": "101-118",
             "publisher": "ACM",
             "conferenceName": "CHI Conference on Human Factors in Computing Systems",
+            "extra": (
+                "Citation Key: lovelace2024\n"
+                "PaperRoach Domain: HCI\n"
+                "PaperRoach Subdomain: Health & Wellbeing"
+            ),
         }
         for value_id, (field_name, value) in enumerate(values.items(), 1):
             field_id = fields.index(field_name) + 1
@@ -162,6 +168,8 @@ class ZoteroTests(unittest.TestCase):
             self.assertEqual(info["issue"], "3")
             self.assertEqual(info["pages"], "101-118")
             self.assertEqual(info["publisher"], "ACM")
+            self.assertEqual(info["primary_domain"], "HCI")
+            self.assertEqual(info["subdomain"], "Health & Wellbeing")
 
     def test_enrich_merges_zotero_metadata_without_dropping_llm_tags(self):
         with tempfile.TemporaryDirectory() as td:
@@ -195,6 +203,8 @@ class ZoteroTests(unittest.TestCase):
             )
             self.assertEqual(enriched.venue_type, "conferencePaper")
             self.assertEqual(enriched.doi, "10.1145/example")
+            self.assertEqual(enriched.primary_domain, "HCI")
+            self.assertEqual(enriched.subdomain, "Health & Wellbeing")
 
 
 if __name__ == "__main__":

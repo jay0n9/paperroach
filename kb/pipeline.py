@@ -35,6 +35,7 @@ from kb.llm import (
     extract_analysis,
     extract_concepts,
     extract_metadata,
+    metadata_classification,
     normalize_concept_key,
     write_concept_article,
     write_integrated_approach,
@@ -221,6 +222,15 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
             new_count = tags_mod.register_new(config, tag_registry, metadata.tags)
             if new_count:
                 _log(f"      · {new_count} new tag(s) added to the Tag Registry")
+            meta_domain, meta_subdomain = metadata_classification(
+                metadata, known_subjects
+            )
+            if meta_domain and not metadata.primary_domain:
+                metadata.primary_domain = meta_domain
+            if meta_subdomain and not metadata.subdomain:
+                metadata.subdomain = meta_subdomain
+            if metadata.subdomain:
+                _log(f"      · metadata subdomain: {metadata.subdomain}")
             _log("      · analysing paper …")
             try:
                 analysis = extract_analysis(client, markdown, metadata, config)
@@ -439,7 +449,9 @@ def _fallback_paper_classification(
     subdomain/domain first, then analysis/body cues only as a fallback.
     """
     metadata_text = classification_metadata_text(metadata)
-    metadata_domain, metadata_subdomain = taxonomy.classify_subdomain_any(metadata_text)
+    metadata_domain, metadata_subdomain = metadata_classification(
+        metadata, known_subjects
+    )
     primary = taxonomy.normalize_domain(metadata_domain, known_subjects)
     if not primary:
         primary = taxonomy.classify_text_heuristic(metadata_text, known_subjects)

@@ -25,6 +25,8 @@ class PaperMetadata:
     issue: str = ""
     pages: str = ""
     publisher: str = ""
+    primary_domain: str = ""
+    subdomain: str = ""
 
 
 @dataclass
