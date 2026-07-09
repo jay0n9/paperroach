@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 from kb import obsidian
@@ -7,7 +9,14 @@ from kb.config import Config
 from kb.pipeline import refile_references
 
 
-def _write_generated_note(path: Path, *, tags: list[str], body: str = "A compact test note.") -> None:
+def _refile_quietly(*args, **kwargs):
+    with redirect_stdout(StringIO()):
+        return refile_references(*args, **kwargs)
+
+
+def _write_generated_note(
+    path: Path, *, tags: list[str], body: str = "A compact test note."
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tag_lines = "\n".join(f"- {tag}" for tag in tags)
     path.write_text(
@@ -48,7 +57,7 @@ class RefilePlanTests(unittest.TestCase):
             _write_generated_note(note, tags=["paper", "computer-graphics", "neural-network"])
             plan = Path(td) / "refile-plan.md"
 
-            result = refile_references(cfg, apply=False, plan_out=plan)
+            result = _refile_quietly(cfg, apply=False, plan_out=plan)
 
             self.assertEqual(result["moved"], 0)
             self.assertEqual(result["planned"], 1)
@@ -66,7 +75,7 @@ class RefilePlanTests(unittest.TestCase):
             _write_generated_note(note, tags=["paper", "computer-graphics", "neural-network"])
             plan = Path(td) / "refile-plan.md"
 
-            result = refile_references(cfg, apply=True, plan_out=plan)
+            result = _refile_quietly(cfg, apply=True, plan_out=plan)
 
             moved = (
                 cfg.references_path
@@ -96,7 +105,7 @@ class RefilePlanTests(unittest.TestCase):
             )
             plan = Path(td) / "refile-plan.md"
 
-            result = refile_references(cfg, apply=False, plan_out=plan)
+            result = _refile_quietly(cfg, apply=False, plan_out=plan)
 
             self.assertEqual(result["planned"], 1)
             text = plan.read_text(encoding="utf-8")

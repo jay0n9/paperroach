@@ -1,10 +1,17 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 from kb.config import Config
 from kb.pipeline import gc
 from kb.store import KBStore
+
+
+def _gc_quietly(*args, **kwargs):
+    with redirect_stdout(StringIO()):
+        return gc(*args, **kwargs)
 
 
 def _cfg(root: Path) -> Config:
@@ -80,7 +87,7 @@ class GCTests(unittest.TestCase):
             store.chunks.add([_chunk_row("aaaaaaaaaaaa", missing_note)])
             store.concepts.add([_concept_row("concept-a", missing_concept)])
 
-            result = gc(cfg, apply=False)
+            result = _gc_quietly(cfg, apply=False)
 
             self.assertEqual(result["removed"], 0)
             self.assertEqual(store.docs.count_rows(), 1)
@@ -114,7 +121,7 @@ class GCTests(unittest.TestCase):
             )
             store.concepts.add([_concept_row("concept-a", missing_concept)])
 
-            result = gc(cfg, apply=True)
+            result = _gc_quietly(cfg, apply=True)
             reopened = KBStore(cfg)
             remaining_docs = reopened.all_docs(columns=["doc_id", "note_path"])
             remaining_doc_ids = {row["doc_id"] for row in remaining_docs}
