@@ -1,6 +1,8 @@
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from pathlib import Path
 
 from kb.config import ConfigError, load_config
@@ -125,6 +127,161 @@ class ConfigLoadingTests(unittest.TestCase):
 
             self.assertFalse(config.zotero_enrich)
             self.assertTrue(config.references_by_subdomain)
+
+    def test_vault_override_ignores_cwd_config_for_different_vault(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            main_vault = root / "main-vault"
+            other_vault = root / "other-vault"
+            external_store = root / "external-store"
+            main_vault.mkdir()
+            other_vault.mkdir()
+            (root / "kb.toml").write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{main_vault.as_posix()}"',
+                        f'kb_dir = "{external_store.as_posix()}"',
+                        'llm_model = "custom-model"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            stderr = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr):
+                    config = load_config({"vault_path": str(other_vault)})
+            finally:
+                os.chdir(self._cwd)
+
+            self.assertEqual(config.vault_path, other_vault)
+            self.assertEqual(config.kb_dir, ".kb")
+            self.assertEqual(config.llm_model, "qwen3:8b")
+            self.assertIn("ignoring", stderr.getvalue())
+            self.assertIn("kb.toml", stderr.getvalue())
+
+    def test_kb_vault_ignores_cwd_config_for_different_vault(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            main_vault = root / "main-vault"
+            other_vault = root / "other-vault"
+            main_vault.mkdir()
+            other_vault.mkdir()
+            (root / "kb.toml").write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{main_vault.as_posix()}"',
+                        'llm_model = "custom-model"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            os.environ["KB_VAULT"] = str(other_vault)
+
+            stderr = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr):
+                    config = load_config()
+            finally:
+                os.chdir(self._cwd)
+
+            self.assertEqual(config.vault_path, other_vault)
+            self.assertEqual(config.llm_model, "qwen3:8b")
+            self.assertIn("ignoring", stderr.getvalue())
+
+    def test_kb_config_forces_specific_config_even_when_vault_differs(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            configured_vault = root / "configured-vault"
+            override_vault = root / "override-vault"
+            configured_vault.mkdir()
+            override_vault.mkdir()
+            cfg = root / "explicit.toml"
+            cfg.write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{configured_vault.as_posix()}"',
+                        'llm_model = "forced-model"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            os.environ["KB_CONFIG"] = str(cfg)
+
+            stderr = StringIO()
+            with redirect_stderr(stderr):
+                config = load_config({"vault_path": str(override_vault)})
+
+            self.assertEqual(config.vault_path, override_vault)
+            self.assertEqual(config.llm_model, "forced-model")
+            self.assertNotIn("ignoring", stderr.getvalue())
+
+    def test_vault_override_keeps_cwd_config_for_same_vault(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            (root / "kb.toml").write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{vault.as_posix()}"',
+                        'llm_model = "custom-model"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            try:
+                os.chdir(root)
+                config = load_config({"vault_path": str(vault)})
+            finally:
+                os.chdir(self._cwd)
+
+            self.assertEqual(config.vault_path, vault)
+            self.assertEqual(config.llm_model, "custom-model")
+
+    def test_vault_local_config_wins_over_cwd_config_when_vault_is_explicit(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            cwd_vault = root / "cwd-vault"
+            target_vault = root / "target-vault"
+            cwd_vault.mkdir()
+            target_vault.mkdir()
+            (root / "kb.toml").write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{cwd_vault.as_posix()}"',
+                        'llm_model = "cwd-model"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (target_vault / "kb.toml").write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{target_vault.as_posix()}"',
+                        'llm_model = "vault-model"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            try:
+                os.chdir(root)
+                config = load_config({"vault_path": str(target_vault)})
+            finally:
+                os.chdir(self._cwd)
+
+            self.assertEqual(config.vault_path, target_vault)
+            self.assertEqual(config.llm_model, "vault-model")
 
 
 if __name__ == "__main__":

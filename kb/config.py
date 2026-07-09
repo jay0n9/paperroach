@@ -133,15 +133,28 @@ def _find_config_file(overrides: dict) -> Path | None:
         if not explicit.is_file():
             raise ConfigError(f"KB_CONFIG points to a missing file: {explicit}")
         return explicit
-    candidates.append(Path.cwd() / "kb.toml")
     # A vault may carry its own kb.toml; consider it if we know the vault.
     vault = overrides.get("vault_path") or os.environ.get("KB_VAULT")
     if vault:
         candidates.append(Path(vault) / "kb.toml")
+    candidates.append(Path.cwd() / "kb.toml")
     for c in candidates:
         if c.is_file():
             return c
     return None
+
+
+def _path_identity(value) -> str:
+    path = Path(value).expanduser()
+    try:
+        resolved = path.resolve()
+    except OSError:
+        resolved = path.absolute()
+    return os.path.normcase(str(resolved))
+
+
+def _same_path(a, b) -> bool:
+    return _path_identity(a) == _path_identity(b)
 
 
 def _coerce(field_name: str, value):
@@ -186,6 +199,20 @@ def load_config(overrides: dict | None = None) -> Config:
                 data = tomllib.load(fh)
         except tomllib.TOMLDecodeError as exc:
             raise ConfigError(f"Invalid TOML in {cfg_file}: {exc}") from exc
+        vault_override = overrides.get("vault_path") or os.environ.get("KB_VAULT")
+        if (
+            vault_override
+            and not os.environ.get("KB_CONFIG")
+            and data.get("vault_path")
+            and not _same_path(data["vault_path"], vault_override)
+        ):
+            print(
+                "paperroach: warning: ignoring "
+                f"{cfg_file} because it configures vault_path={data['vault_path']!r} "
+                f"but --vault/KB_VAULT selects {str(vault_override)!r}",
+                file=sys.stderr,
+            )
+            data = {}
         for k, v in data.items():
             if k in valid:
                 merged[k] = v

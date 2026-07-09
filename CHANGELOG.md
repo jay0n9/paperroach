@@ -20,6 +20,9 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Fixed
 
+- Automatically discovered `kb.toml` files for a different vault are ignored
+  when `--vault` or `KB_VAULT` selects another vault, preventing accidental
+  reuse of another vault's absolute store path or model settings.
 - Read-only commands now avoid initializing `.kb` on fresh vaults when the
   store does not exist yet.
 - `paperroach stats` now validates existing store metadata compatibility

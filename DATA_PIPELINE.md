@@ -18,7 +18,10 @@ The pipeline is designed around limited VRAM:
 - The LLM is unloaded.
 - PASS B uses the embedding model for vector storage and related-link search.
 
-Current local configuration is read from `kb.toml`.
+Current local configuration is read from `kb.toml`. If `--vault` or `KB_VAULT`
+selects a different vault than an automatically discovered config file,
+PaperRoach ignores that mismatched file unless it was explicitly selected with
+`KB_CONFIG`.
 
 ## 2. Main Inputs
 

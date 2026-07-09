@@ -93,6 +93,10 @@ CLI flags > KB_* environment variables > kb.toml > built-in defaults
 
 If `KB_CONFIG` is set, it must point to an existing TOML file. Invalid TOML,
 boolean, and integer values fail fast with field-specific configuration errors.
+When `--vault` or `KB_VAULT` selects a different vault than an automatically
+discovered `kb.toml`, PaperRoach ignores that mismatched config file so another
+vault's absolute `kb_dir` or model settings are not reused by accident. Set
+`KB_CONFIG` to force a specific config file.
 
 Generated note prose and RAG answers default to English. You can change this in
 `kb.toml` with `note_language` and `answer_language`.
