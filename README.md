@@ -280,8 +280,8 @@ python -m pip wheel . --no-deps -w dist
 ```
 
 The test suite includes taxonomy regression checks for metadata-first subdomain
-filing, including hyphenated tags such as `computer-graphics`,
-`computer-vision`, and `deep-learning`.
+filing, pure-function edge cases, and a stubbed `build -> search -> ask` smoke
+test that exercises the real local store without requiring a live Ollama server.
 
 ## PDF Parsing
 
