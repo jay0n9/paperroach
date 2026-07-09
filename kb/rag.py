@@ -9,6 +9,8 @@ first, evicts the embedder, then loads the LLM.
 """
 from __future__ import annotations
 
+import html
+
 from kb.config import Config
 from kb.ollama_client import OllamaClient
 from kb.store import KBStore
@@ -79,10 +81,11 @@ def ask(query: str, config: Config, k: int | None = None) -> dict:
 def _build_context(rows: list[dict]) -> str:
     blocks = []
     for i, r in enumerate(rows, 1):
-        title = r.get("title") or "(untitled)"
-        header = r.get("header") or ""
+        title = _escape_context(r.get("title") or "(untitled)")
+        header = _escape_context(r.get("header") or "")
         head = f"{title}" + (f" › {header}" if header else "")
-        blocks.append(f"[{i}] Source: {head}\n{r.get('text', '')}")
+        text = _escape_context(r.get("text", ""))
+        blocks.append(f"[{i}] Source: {head}\n{text}")
     return "\n\n".join(blocks)
 
 
@@ -90,7 +93,7 @@ def _dedupe_sources(rows: list[dict]) -> list[dict]:
     seen: set[str] = set()
     sources = []
     for r in rows:
-        key = r.get("doc_id", "")
+        key = r.get("doc_id") or r.get("note_path") or r.get("title") or str(id(r))
         if key in seen:
             continue
         seen.add(key)
@@ -106,3 +109,8 @@ def _dedupe_sources(rows: list[dict]) -> list[dict]:
 def _snippet(text: str, limit: int = 220) -> str:
     text = " ".join(text.split())
     return text if len(text) <= limit else text[:limit] + "…"
+
+
+def _escape_context(value: object) -> str:
+    """Keep untrusted note text inside the intended prompt context block."""
+    return html.escape(str(value or ""), quote=False)
