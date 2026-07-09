@@ -1,5 +1,7 @@
 # PaperRoach
 
+[![CI](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml/badge.svg)](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml)
+
 PaperRoach is a local-first paper knowledge pipeline for researchers who keep
 papers in Zotero and notes in Obsidian. It turns PDFs and Markdown notes into a
 linked Obsidian knowledge library, backed by LanceDB vector search and local
@@ -251,9 +253,13 @@ is provided.
 
 ## Development Checks
 
+Pull requests run the same checks on GitHub Actions for Python 3.11 and 3.12
+on Linux and Windows.
+
 ```bash
 python -m unittest discover -s tests -v
 python -m compileall -q kb paperroach tests
+python -m pip wheel . --no-deps -w dist
 ```
 
 The test suite includes taxonomy regression checks for metadata-first subdomain
