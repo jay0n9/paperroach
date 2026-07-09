@@ -11,6 +11,7 @@ from kb import __version__
 from kb import cli
 from kb.cli import build_parser, main
 from kb.config import Config, load_config
+from kb.store import KBStore
 
 
 class CLITests(unittest.TestCase):
@@ -131,6 +132,52 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 3)
             build_mock.assert_not_called()
             self.assertIn("Another PaperRoach write command", stderr.getvalue())
+
+    def test_doctor_reports_warnings_but_succeeds_for_empty_vault(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = self._temp_config(Path(td))
+            stdout = StringIO()
+            with patch.object(cli, "_config_from_args", return_value=config):
+                with patch("kb.zotero.find_data_dir", return_value=None):
+                    with redirect_stdout(stdout):
+                        code = main(["doctor", "--skip-ollama"])
+
+            output = stdout.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("[OK] Version", output)
+            self.assertIn("[WARN] Store", output)
+            self.assertIn("[WARN] Ollama", output)
+            self.assertIn("Summary: 0 failure(s)", output)
+            self.assertFalse(config.kb_path.exists())
+
+    def test_doctor_fails_on_store_embedding_model_mismatch(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            first = Config(
+                vault_path=vault,
+                kb_dir=".kb",
+                embed_model="first",
+                embed_dim=3,
+            )
+            KBStore(first)
+            changed = Config(
+                vault_path=vault,
+                kb_dir=".kb",
+                embed_model="second",
+                embed_dim=3,
+            )
+            stdout = StringIO()
+            with patch.object(cli, "_config_from_args", return_value=changed):
+                with patch("kb.zotero.find_data_dir", return_value=None):
+                    with redirect_stdout(stdout):
+                        code = main(["doctor", "--skip-ollama"])
+
+            output = stdout.getvalue()
+            self.assertEqual(code, 1)
+            self.assertIn("[FAIL] Store", output)
+            self.assertIn("embed_model='first'", output)
 
 
 if __name__ == "__main__":

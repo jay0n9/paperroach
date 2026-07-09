@@ -6,10 +6,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 from kb.config import Config
-from kb.store import KBStore, STORE_SCHEMA_VERSION, _store_meta_path
+from kb.store import KBStore, STORE_SCHEMA_VERSION, _store_meta_path, table_names
 
 
 class StoreTests(unittest.TestCase):
+    def test_table_names_does_not_create_store_metadata_for_empty_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = Config(vault_path=Path(td) / "vault", kb_dir=".kb", embed_dim=3)
+            cfg.kb_path.mkdir(parents=True)
+
+            self.assertEqual(table_names(cfg), set())
+            self.assertFalse(_store_meta_path(cfg).exists())
+
     def test_store_initialization_writes_metadata(self):
         with tempfile.TemporaryDirectory() as td:
             cfg = Config(

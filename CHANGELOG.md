@@ -7,6 +7,7 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Added
 
+- `paperroach doctor` for config, store, Zotero, and Ollama health checks.
 - Store metadata validation for schema version, embedding model, and embedding
   dimension compatibility.
 - Release checklist and changelog template.

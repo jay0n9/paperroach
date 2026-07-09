@@ -511,6 +511,8 @@ python -u -m paperroach watch
 
 | Command | Purpose | Writes? |
 |---|---|---|
+| `paperroach doctor` | Check config, store compatibility, Zotero discovery, and Ollama reachability | No |
+| `paperroach doctor --skip-ollama` | Run offline config/store/Zotero checks | No |
 | `paperroach stats` | Show store counts and model config | No |
 | `paperroach gc` | Report orphan/duplicate docs and orphan concepts | No |
 | `paperroach gc --apply` | Delete orphan/duplicate store rows and duplicate generated notes | Yes |

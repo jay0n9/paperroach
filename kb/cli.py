@@ -6,6 +6,7 @@
     paperroach ask "<query>"        RAG answer grounded in your library
     paperroach relink               recompute related-literature wikilinks
     paperroach stats                show store statistics
+    paperroach doctor               check local configuration and dependencies
 """
 from __future__ import annotations
 
@@ -115,6 +116,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_stats = sub.add_parser("stats", help="Show store statistics")
     _add_common(p_stats)
     p_stats.set_defaults(func=cmd_stats)
+
+    p_doctor = sub.add_parser("doctor", help="Check config, store, Zotero, and Ollama")
+    p_doctor.add_argument(
+        "--skip-ollama",
+        action="store_true",
+        help="Do not attempt an Ollama server health check",
+    )
+    _add_common(p_doctor)
+    p_doctor.set_defaults(func=cmd_doctor)
 
     p_refile = sub.add_parser(
         "refile",
@@ -465,6 +475,78 @@ def cmd_stats(args: argparse.Namespace) -> int:
     print(f"LLM model   : {config.llm_model}")
     print(f"Embed model : {config.embed_model} ({config.embed_dim}-dim)")
     return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    from kb import store as store_mod
+    from kb import zotero
+
+    config = _config_from_args(args)
+    failures = 0
+    warnings = 0
+
+    def line(status: str, label: str, detail: str) -> None:
+        print(f"[{status}] {label:<12} {detail}")
+
+    def ok(label: str, detail: str) -> None:
+        line("OK", label, detail)
+
+    def warn(label: str, detail: str) -> None:
+        nonlocal warnings
+        warnings += 1
+        line("WARN", label, detail)
+
+    def fail(label: str, detail: str) -> None:
+        nonlocal failures
+        failures += 1
+        line("FAIL", label, detail)
+
+    print("PaperRoach doctor")
+    ok("Version", __version__)
+    ok("Vault", str(config.vault_path))
+
+    if config.references_path.exists():
+        ok("References", str(config.references_path))
+    else:
+        warn("References", f"missing until init/build creates it: {config.references_path}")
+
+    if not config.kb_path.exists():
+        warn("Store", f"not initialized yet: {config.kb_path}")
+    else:
+        try:
+            names = store_mod.table_names(config)
+            if not names:
+                warn("Store", f"no LanceDB tables yet: {config.kb_path}")
+            else:
+                store = store_mod.KBStore(config)
+                n_docs, n_chunks = store.counts()
+                ok("Store", f"{n_docs} document(s), {n_chunks} chunk(s)")
+        except Exception as exc:
+            fail("Store", str(exc))
+
+    data_dir = zotero.find_data_dir(config)
+    if data_dir is None:
+        if config.zotero_dir:
+            fail("Zotero", f"configured path is invalid: {config.zotero_dir}")
+        else:
+            warn("Zotero", "data directory not found; set zotero_dir if needed")
+    else:
+        pdf_count = len(zotero.storage_pdfs(data_dir))
+        ok("Zotero", f"{data_dir} ({pdf_count} PDF attachment(s))")
+
+    if args.skip_ollama:
+        warn("Ollama", "skipped")
+    else:
+        from kb.ollama_client import OllamaClient
+
+        try:
+            OllamaClient(config).ping()
+            ok("Ollama", config.ollama_host)
+        except Exception as exc:
+            fail("Ollama", str(exc))
+
+    print(f"Summary: {failures} failure(s), {warnings} warning(s)")
+    return 1 if failures else 0
 
 
 # --------------------------------------------------------------------------- #

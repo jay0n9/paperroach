@@ -246,6 +246,7 @@ embedder, then loads the LLM to answer from retrieved context.
 ## Maintenance
 
 ```bash
+paperroach doctor
 paperroach stats
 paperroach relink
 paperroach refile
@@ -256,6 +257,8 @@ paperroach gc
 
 Useful maintenance commands:
 
+- `doctor`: check config, vault/store compatibility, Zotero discovery, and
+  Ollama reachability. Use `--skip-ollama` for offline checks.
 - `stats`: show document and chunk counts.
 - `relink`: recompute related-paper and related-concept links.
 - `refile`: move generated paper notes into domain/subdomain folders. Add

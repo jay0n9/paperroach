@@ -104,6 +104,14 @@ def _save_store_meta(config: Config) -> None:
     os.replace(tmp, path)
 
 
+def table_names(config: Config) -> set[str]:
+    """Existing LanceDB tables without creating the PaperRoach schema."""
+    if not config.kb_path.exists():
+        return set()
+    db = lancedb.connect(str(config.kb_path))
+    return _table_names(db)
+
+
 class KBStore:
     def __init__(self, config: Config):
         self.config = config
