@@ -654,14 +654,8 @@ batch. Important boundaries:
 
 ## 14. Recommended Next Improvements
 
-1. Add tests for pure functions:
-   - filename sanitization
-   - frontmatter splitting
-   - chunking
-   - content dedupe
-   - managed block replacement
-2. Align `.gitignore` with actual generated artifacts:
-   - `.kbstore/`
-   - `kb-watch.log*`
-   - `kb_backups/`
-3. Document the required Python environment for manual commands.
+1. Add a stubbed end-to-end smoke test for `build -> search -> ask` that does
+   not require a live Ollama server.
+2. Add a small Zotero SQLite fixture to verify venue/DOI/domain/subdomain
+   enrichment against real table shapes.
+3. Document release/versioning steps for publishing tagged builds.

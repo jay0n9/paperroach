@@ -70,6 +70,12 @@ pip install -r requirements.txt
 The primary CLI is `paperroach`. The older `kb` command remains as a
 compatibility alias.
 
+For manual commands and development checks, use Python 3.11 or 3.12 in a
+dedicated virtual environment, then install the project with `pip install -e .`.
+This is the same supported Python range exercised by CI on Windows and Linux.
+Optional PDF backends such as OCR, Docling, and Nougat should be installed only
+in that environment.
+
 ## Configure
 
 ```bash

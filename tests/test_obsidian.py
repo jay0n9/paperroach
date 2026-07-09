@@ -35,6 +35,44 @@ def _existing_note_text(my_notes: str) -> str:
 
 
 class ObsidianNoteTests(unittest.TestCase):
+    def test_sanitize_filename_is_windows_and_wikilink_safe(self):
+        self.assertEqual(
+            obsidian.sanitize_filename('CON: bad/name [draft]?', 2024),
+            "CON bad name (draft) (2024)",
+        )
+        self.assertEqual(
+            obsidian.sanitize_filename("A" * 160, None),
+            "A" * 120,
+        )
+        self.assertEqual(obsidian.sanitize_filename("CON", None), "CON (concept)")
+        self.assertEqual(obsidian.sanitize_filename("...", None), "Untitled")
+
+    def test_split_frontmatter_uses_line_delimited_closing_marker(self):
+        text = (
+            "---\n"
+            "tags:\n"
+            "- computer-science---computer-vision\n"
+            "source: https://example.org/a---b\n"
+            "---\n"
+            "# Body\n"
+            "\n"
+            "Text with --- inside the body.\n"
+        )
+
+        frontmatter, body = obsidian.split_frontmatter(text)
+
+        self.assertIn("computer-science---computer-vision", frontmatter)
+        self.assertIn("https://example.org/a---b", frontmatter)
+        self.assertEqual(body, "# Body\n\nText with --- inside the body.\n")
+
+    def test_split_frontmatter_returns_original_text_without_opening_marker(self):
+        text = "# Plain Note\n\nNo YAML here.\n"
+
+        frontmatter, body = obsidian.split_frontmatter(text)
+
+        self.assertIsNone(frontmatter)
+        self.assertEqual(body, text)
+
     def test_is_generated_note_parses_frontmatter_flags_conservatively(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

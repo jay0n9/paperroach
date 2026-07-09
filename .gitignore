@@ -21,6 +21,7 @@ kb.toml
 .kb/
 .kbstore/
 kb_backups/
+kb-watch.log*
 *.log
 *.old
 refile-plan*.md
