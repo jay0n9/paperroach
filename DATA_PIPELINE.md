@@ -492,8 +492,8 @@ python -u -m paperroach watch
 | `paperroach gc` | Report orphan/duplicate docs and orphan concepts | No |
 | `paperroach gc --apply` | Delete orphan/duplicate store rows and duplicate generated notes | Yes |
 | `paperroach relink` | Refresh paper related links and concept related links | Yes |
-| `paperroach refile` | Dry-run paper note moves into subject folders | No |
-| `paperroach refile --apply` | Move generated paper notes and update store note paths | Yes |
+| `paperroach refile` | Dry-run paper note moves into domain/subdomain folders | No |
+| `paperroach refile --apply` | Move generated paper notes, persist inferred filing metadata, and update store note paths | Yes |
 | `paperroach retag` | Dry-run paper tag consolidation | No note writes, but calls LLM |
 | `paperroach retag --apply` | Rewrite tag registry and paper note tags | Yes |
 | `paperroach retag --concepts` | Dry-run concept tag enrichment | No note writes, but calls LLM |

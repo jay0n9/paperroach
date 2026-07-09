@@ -518,7 +518,7 @@ def relink(config: Config) -> dict:
 
 
 def refile_references(config: Config, apply: bool = False) -> dict:
-    """File existing generated paper notes into ``<references_dir>/<Subject>/``.
+    """File generated paper notes into ``<references>/<Domain>/<Subdomain>/``.
 
     The subject is derived without the LLM, in this order:
     frontmatter ``Domain``/``Subdomain`` -> taxonomy heuristic -> concept
@@ -549,7 +549,7 @@ def refile_references(config: Config, apply: bool = False) -> dict:
         for r in store.all_docs(columns=["doc_id", "note_path"])
     }
 
-    moves: list[tuple[Path, Path]] = []
+    moves: list[tuple[Path, Path, str, str]] = []
     for note in sorted(refs.rglob("*.md")):
         if not obsidian.is_generated_note(note):
             continue
@@ -564,7 +564,7 @@ def refile_references(config: Config, apply: bool = False) -> dict:
         if dest.exists():
             _log(f"  ! not moved (name already exists at target): {note.name}")
             continue
-        moves.append((note, dest))
+        moves.append((note, dest, subject, subdomain))
         _log(f"  {note.stem}  →  {dest_dir.relative_to(refs)}/")
 
     if not moves:
@@ -575,10 +575,11 @@ def refile_references(config: Config, apply: bool = False) -> dict:
         return {"moved": 0}
 
     moved = 0
-    for src, dest in moves:
+    for src, dest, subject, subdomain in moves:
         dest.parent.mkdir(parents=True, exist_ok=True)
         old_str = str(src)
         src.rename(dest)
+        _ensure_paper_classification_frontmatter(dest, subject, subdomain)
         moved += 1
         doc_id = path_to_id.get(old_str)
         if doc_id:
@@ -593,7 +594,7 @@ def refile_references(config: Config, apply: bool = False) -> dict:
                 d.rmdir()
         except OSError:
             pass
-    _log(f"Moved {moved} note(s) into subject folders.")
+    _log(f"Moved {moved} note(s) into domain/subdomain folders.")
     return {"moved": moved}
 
 
@@ -612,13 +613,75 @@ def _paper_domain_for_note(
                 if isinstance(sub_value, str) and sub_value.strip():
                     subdomain = taxonomy.normalize_subdomain(sub_value, domain)
                     break
+            if not subdomain:
+                text = _note_classification_text(note, fm)
+                subdomain = taxonomy.classify_subdomain_heuristic(text, domain)
             return domain, subdomain
     text = obsidian._read_text_tolerant(note)
     guessed = taxonomy.classify_text_heuristic(text[:12000], candidates)
     if guessed:
-        return guessed, ""
+        subdomain = taxonomy.classify_subdomain_heuristic(
+            _note_classification_text(note, fm, text), guessed
+        )
+        return guessed, subdomain
     voted = _subject_vote(note, domain_of)
-    return voted, ""
+    subdomain = (
+        taxonomy.classify_subdomain_heuristic(_note_classification_text(note, fm, text), voted)
+        if voted
+        else ""
+    )
+    return voted, subdomain
+
+
+def _note_classification_text(note: Path, fm: dict, text: str | None = None) -> str:
+    """Compact, classification-oriented text for existing generated notes.
+
+    Full generated notes contain broad words like "algorithm" and "training"
+    that can overpower the actual filing topic. Prefer title, tags, stored
+    metadata, and the first explanatory sections.
+    """
+    text = text if text is not None else obsidian._read_text_tolerant(note)
+    pieces = [
+        note.stem,
+        str(fm.get("Domain") or ""),
+        str(fm.get("Subdomain") or ""),
+        " ".join(str(t) for t in (fm.get("tags") or [])),
+        str(fm.get("Venue") or ""),
+    ]
+    for heading in (
+        "TL;DR",
+        "Problem & Motivation",
+        "Approach",
+        "Key Results",
+        "Concepts",
+    ):
+        m = re.search(rf"(?ms)^## {re.escape(heading)}\s*$(.*?)(?=^## |\Z)", text)
+        if m:
+            pieces.append(m.group(1).strip()[:2500])
+    return "\n\n".join(p for p in pieces if p)
+
+
+def _ensure_paper_classification_frontmatter(
+    note: Path, domain: str, subdomain: str
+) -> bool:
+    """Persist inferred filing fields so future refile runs are stable."""
+    fm_text, body = obsidian.split_frontmatter(obsidian._read_text_tolerant(note))
+    if fm_text is None:
+        return False
+    fm = obsidian._read_frontmatter(note)
+    if not isinstance(fm, dict):
+        return False
+    changed = False
+    if domain and not str(fm.get("Domain") or "").strip():
+        fm["Domain"] = domain
+        changed = True
+    if subdomain and not str(fm.get("Subdomain") or "").strip():
+        fm["Subdomain"] = subdomain
+        changed = True
+    if not changed:
+        return False
+    note.write_text(f"---\n{obsidian._dump_yaml(fm).rstrip()}\n---\n{body}", encoding="utf-8")
+    return True
 
 
 def _subject_vote(note: Path, domain_of: dict[str, str]) -> str:

@@ -196,6 +196,7 @@ SUBDOMAIN_RULES = {
             "name": "Computer Vision",
             "positive_cues": [
                 "computer vision",
+                "dataset",
                 "image recognition",
                 "face recognition",
                 "facial recognition",
@@ -205,6 +206,8 @@ SUBDOMAIN_RULES = {
                 "facial expression",
                 "active shape model",
                 "point distribution model",
+                "facial component",
+                "single-view",
                 "3d reconstruction",
             ],
         },
@@ -214,6 +217,12 @@ SUBDOMAIN_RULES = {
                 "computer graphics",
                 "rendering",
                 "mesh",
+                "3d face reconstruction",
+                "face reconstruction",
+                "3d face model",
+                "morphable face model",
+                "3d morphable",
+                "statistical face model",
                 "animation",
                 "geometry processing",
                 "avatar",
@@ -222,6 +231,8 @@ SUBDOMAIN_RULES = {
                 "blend skinning",
                 "facial shape",
                 "blendshape",
+                "riggable",
+                "uv",
             ],
         },
         {
@@ -286,6 +297,7 @@ SUBDOMAIN_RULES = {
         {
             "name": "VR/AR Interaction",
             "positive_cues": [
+                "vr",
                 "virtual reality",
                 "augmented reality",
                 "mixed reality",
@@ -520,10 +532,13 @@ def classify_subdomain_heuristic(
     if not rules:
         return ""
     scores: dict[str, int] = {}
+    head = hay[:2000]
     for rule in rules:
         score = 0
         for cue in rule["positive_cues"]:
-            if _cue_present(hay, cue):
+            if _cue_present(head, cue):
+                score += 5
+            elif _cue_present(hay, cue):
                 score += 2
         scores[rule["name"]] = score
     best, score = max(scores.items(), key=lambda kv: (kv[1], kv[0]))

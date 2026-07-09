@@ -235,7 +235,7 @@ Useful maintenance commands:
 
 - `stats`: show document and chunk counts.
 - `relink`: recompute related-paper and related-concept links.
-- `refile`: move generated paper notes into domain folders.
+- `refile`: move generated paper notes into domain/subdomain folders.
 - `retag`: consolidate generated note tags into the Tag Registry.
 - `organize`: plan or apply Knowledge Library folder organization.
 - `gc`: report or remove orphaned store rows and duplicate generated notes.
