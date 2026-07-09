@@ -72,6 +72,8 @@ def collect_inputs(paths: list[Path], config: Config, recursive: bool) -> list[P
         p = p.resolve()
         if p in seen:
             return
+        if not p.is_file():
+            return
         if p.suffix.lower() not in ingest_mod.SUPPORTED_SUFFIXES:
             return
         # Never re-ingest our own output, the DB, or anything under .kb.
@@ -85,10 +87,9 @@ def collect_inputs(paths: list[Path], config: Config, recursive: bool) -> list[P
     for raw in paths:
         path = raw.expanduser()
         if path.is_dir():
-            globber = path.rglob if recursive else path.glob
-            for suffix in ("*.pdf", "*.md", "*.markdown"):
-                for f in sorted(globber(suffix)):
-                    add(f)
+            files = path.rglob("*") if recursive else path.iterdir()
+            for f in sorted(files):
+                add(f)
         elif path.is_file():
             add(path)
         else:

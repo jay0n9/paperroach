@@ -126,6 +126,20 @@ def _make_zotero_fixture(root: Path) -> tuple[Path, Path]:
 
 
 class ZoteroTests(unittest.TestCase):
+    def test_storage_pdfs_matches_pdf_suffix_case_insensitively(self):
+        with tempfile.TemporaryDirectory() as td:
+            data_dir = Path(td) / "Zotero"
+            lower = data_dir / "storage" / "LOWER" / "paper.pdf"
+            upper = data_dir / "storage" / "UPPER" / "paper.PDF"
+            ignored = data_dir / "storage" / "TEXT" / "note.txt"
+            for path in (lower, upper, ignored):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("x", encoding="utf-8")
+
+            found = zotero.storage_pdfs(data_dir)
+
+            self.assertEqual({p.name for p in found}, {"paper.pdf", "paper.PDF"})
+
     def test_read_metadata_uses_parent_item_for_storage_attachment(self):
         with tempfile.TemporaryDirectory() as td:
             data_dir, pdf = _make_zotero_fixture(Path(td))

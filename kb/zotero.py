@@ -64,7 +64,11 @@ def storage_pdfs(data_dir: Path) -> list[Path]:
     storage = data_dir / "storage"
     if not storage.exists():
         return []
-    return sorted(storage.glob("*/*.pdf"))
+    return sorted(
+        p
+        for p in storage.glob("*/*")
+        if p.is_file() and p.suffix.lower() == ".pdf"
+    )
 
 
 def is_zotero_pdf(data_dir: Path | None, path: Path) -> bool:
