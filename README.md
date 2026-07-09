@@ -107,9 +107,10 @@ For each input, PaperRoach:
 4. Distills concepts and drafts concept-note content.
 5. Chunks the document.
 6. Unloads the LLM and loads the embedding model.
-7. Stores chunk and summary embeddings in LanceDB.
-8. Finds related papers and writes Obsidian notes.
-9. Creates or merges concept notes in the Knowledge Library.
+7. Embeds chunks and summary text.
+8. Finds related papers from the existing store and writes paper/source notes.
+9. Commits successfully written documents to LanceDB and creates concept notes.
+10. Saves the content-hash ledger and refreshes related-paper links.
 
 PDFs become generated paper notes under:
 

@@ -71,12 +71,14 @@ flowchart TD
     G --> H["chunk Markdown"]
     H --> I["unload LLM / load embedder"]
     I --> J["PASS B: embed chunks + summary"]
-    J --> K["LanceDB upsert"]
-    K --> L["related paper search"]
-    L --> M["write paper notes"]
+    J --> K["related paper search from existing store"]
+    K --> L["write paper / source notes"]
+    L --> M["LanceDB upsert + stage content hash"]
     M --> N["write / merge concept notes"]
-    N --> O["embed concepts + related concept links"]
-    O --> P["write MOCs / optimize store"]
+    N --> O["content-hash ledger commit"]
+    O --> P["refresh related-paper links"]
+    P --> Q["embed concepts + related concept links"]
+    Q --> R["write MOCs / optimize store"]
 ```
 
 ## 5. Build Pipeline
@@ -256,7 +258,7 @@ client.unload_llm()
 
 This is important because the LLM and embedder may not fit in VRAM together.
 
-### 5.7 PASS B: Embedding and Store Upsert
+### 5.7 PASS B: Embedding, Note Write, and Store Commit
 
 Module:
 
@@ -268,8 +270,14 @@ For each document:
 
 1. Embed every chunk.
 2. Embed the summary.
-3. Upsert document metadata into the `docs` table.
-4. Replace all chunk rows for the document in the `chunks` table.
+3. Search related papers from the existing store.
+4. Write the paper note or update a source note related-link block.
+5. Upsert document metadata into the `docs` table only after the note write
+   succeeds.
+6. Replace all chunk rows for the document in the `chunks` table.
+7. Merge concept notes for successfully indexed PDFs.
+8. Commit the content hash to `content_hashes.json`.
+9. Refresh related-paper links after successful documents are in the store.
 
 LanceDB tables:
 
@@ -613,17 +621,13 @@ batch. Important boundaries:
 
 - Ingest failure skips that input.
 - Analysis failure can still write a thinner note.
-- Embedding/store failure skips that document until a later run.
-- Note-write failure is logged and the batch continues.
+- Embedding failure skips that document until a later run.
+- PDF note-write failure prevents store upsert and content-hash ledger commit,
+  so a later run can retry it.
+- Store failure after note writing leaves the note in place but does not mark
+  the content hash as completed, so a later run can retry the searchable index.
 - Watcher retries failed PDFs up to 3 times.
 - Store optimization is best-effort and never blocks a build.
-
-Important consistency risk:
-
-- Store upsert and content-hash ledger update happen before paper note writing.
-  If note writing fails after storage succeeds, the document may look processed
-  even though the Obsidian note was not written. This should be treated as the
-  main transactional boundary to improve.
 
 ## 13. Module Map
 

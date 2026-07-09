@@ -4,7 +4,7 @@
                                                   nougat gets the GPU alone]
     PASS A1  metadata → analysis → chunk          [Qwen3 8B resident]
        ⇄     unload LLM  ───────────────────────  [VRAM swap, once]
-    PASS B   embed → store → link → write note     [bge-m3 resident]
+    PASS B   embed → link → write note → store     [bge-m3 resident]
 
 The swap is the key 8GB design point: the 7GB LLM is fully evicted before the
 1.2GB embedder loads (and vice versa at the start of a run), so they never
@@ -358,7 +358,7 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
         r["doc_id"]: r.get("note_path", "")
         for r in store.all_docs(columns=["doc_id", "note_path"])
     }
-    embedded: list[Document] = []
+    embedded: list[tuple[Document, list[list[float]], list[float]]] = []
     for i, doc in enumerate(docs, 1):
         _log(f"  [{i}/{len(docs)}] embedding {doc.metadata.title}")
         try:
@@ -366,25 +366,19 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
             summary_text = doc.metadata.summary or doc.metadata.title
             vectors = client.embed([c.text for c in doc.chunks] + [summary_text])
             chunk_vectors, summary_vector = vectors[:-1], vectors[-1]
-            store.upsert_document(doc, chunk_vectors, summary_vector)
             doc.summary_vector = summary_vector
-            embedded.append(doc)
-            h = hash_by_id.get(doc.doc_id)
-            if h:
-                ledger[h] = doc.doc_id
+            embedded.append((doc, chunk_vectors, summary_vector))
         except Exception as exc:
             # One transient failure must not discard the whole batch's PASS A
             # work — skip this document; a later run picks it up again.
-            _log(f"      ! embedding/store failed: {exc}")
-    _save_hash_ledger(config, ledger)
-    docs = embedded
-    if not docs:
+            _log(f"      ! embedding failed: {exc}")
+    if not embedded:
         _log("No document could be embedded.")
         return {"processed": 0, "succeeded": []}
 
     # ── ⑥ related-literature linking ────────────────────────────────
     _log("  linking related literature …")
-    for doc in docs:
+    for doc, _chunk_vectors, _summary_vector in embedded:
         related = store.related_for_vector(
             doc.summary_vector,
             exclude_doc_id=doc.doc_id,
@@ -396,15 +390,11 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
     _log("  writing notes …")
     written = 0
     concept_paths: list[Path] = []
-    for doc in docs:
+    stored: list[Document] = []
+    for doc, chunk_vectors, summary_vector in embedded:
         try:
             if doc.kind == "pdf":
                 obsidian.write_generated_note(doc, doc.related, config)
-                _cleanup_orphan(old_note_paths.get(doc.doc_id, ""), doc.note_path)
-                touched = knowledge.write_concept_notes(doc, config)
-                if touched:
-                    concept_paths.extend(touched)
-                    _log(f"      · {len(touched)} concept note(s) → Knowledge Library")
                 written += 1
             elif config.rewrite_source_notes:
                 if doc.note_path and obsidian.update_related_in_file(
@@ -413,6 +403,38 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                     written += 1
         except Exception as exc:  # one bad note shouldn't abort the rest
             _log(f"      ! note write failed for '{doc.metadata.title}': {exc}")
+            continue
+
+        try:
+            store.upsert_document(doc, chunk_vectors, summary_vector)
+            if doc.kind == "pdf":
+                _cleanup_orphan(old_note_paths.get(doc.doc_id, ""), doc.note_path)
+            stored.append(doc)
+            h = hash_by_id.get(doc.doc_id)
+            if h:
+                ledger[h] = doc.doc_id
+            if doc.kind == "pdf":
+                try:
+                    touched = knowledge.write_concept_notes(doc, config)
+                    if touched:
+                        concept_paths.extend(touched)
+                        _log(f"      · {len(touched)} concept note(s) → Knowledge Library")
+                except Exception as exc:
+                    _log(
+                        f"      · concept note write failed for "
+                        f"'{doc.metadata.title}' ({exc})"
+                    )
+        except Exception as exc:
+            _log(f"      ! store update failed for '{doc.metadata.title}': {exc}")
+
+    # Commit the content-hash ledger only for documents that reached the store.
+    _save_hash_ledger(config, ledger)
+    docs = stored
+    if not docs:
+        _log("No document could be stored.")
+        return {"processed": 0, "succeeded": []}
+
+    _refresh_related_links(docs, store, config)
 
     # ── ⑦b cross-link concept notes (semantic, library-wide) ────────
     if config.create_concept_notes and concept_paths:
@@ -438,6 +460,40 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
         "succeeded": [d.doc_id for d in docs],
         "skipped_duplicates": dup_ids,
     }
+
+
+def _refresh_related_links(docs: list[Document], store: KBStore, config: Config) -> None:
+    """Refresh related-paper blocks after successful docs are committed.
+
+    The first related search runs before the current batch is stored, so PDF
+    notes can be written before the store/content-hash ledger is finalized. A
+    second best-effort pass restores same-batch related links without letting a
+    related-block rewrite failure invalidate the now-existing note and store row.
+    """
+    _log("  refreshing related links …")
+    for doc in docs:
+        if doc.summary_vector is None:
+            continue
+        try:
+            related = store.related_for_vector(
+                doc.summary_vector,
+                exclude_doc_id=doc.doc_id,
+                k=config.related_top_k,
+            )
+            targets = [r["link_target"] for r in related if r.get("link_target")]
+        except Exception as exc:
+            _log(f"      · related refresh failed for '{doc.metadata.title}' ({exc})")
+            continue
+        if targets == doc.related:
+            continue
+        doc.related = targets
+        try:
+            if doc.kind == "pdf":
+                obsidian.write_generated_note(doc, doc.related, config)
+            elif config.rewrite_source_notes and doc.note_path:
+                obsidian.update_related_in_file(doc.note_path, doc.related)
+        except Exception as exc:
+            _log(f"      · related block rewrite failed for '{doc.metadata.title}' ({exc})")
 
 
 def _fallback_paper_classification(
