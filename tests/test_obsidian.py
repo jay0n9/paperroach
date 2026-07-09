@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 from kb.config import Config
@@ -122,6 +124,60 @@ class ObsidianNoteTests(unittest.TestCase):
             self.assertIn("After block.", text)
             self.assertIn("- [[New Paper]]", text)
             self.assertNotIn("Old Paper", text)
+
+    def test_update_related_in_file_skips_duplicate_marker_blocks(self):
+        with tempfile.TemporaryDirectory() as td:
+            note = Path(td) / "User Note.md"
+            original = "\n".join(
+                [
+                    "# User Note",
+                    "",
+                    "## Related Papers",
+                    "",
+                    obsidian.RELATED_START,
+                    "- [[Old Paper One]]",
+                    obsidian.RELATED_END,
+                    "",
+                    "Between blocks.",
+                    "",
+                    obsidian.RELATED_START,
+                    "- [[Old Paper Two]]",
+                    obsidian.RELATED_END,
+                    "",
+                ]
+            )
+            note.write_text(original, encoding="utf-8")
+
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                changed = obsidian.update_related_in_file(note, ["New Paper"])
+
+            self.assertFalse(changed)
+            self.assertIn("2 start marker(s) and 2 end marker(s)", stdout.getvalue())
+            self.assertEqual(note.read_text(encoding="utf-8"), original)
+
+    def test_update_related_in_file_skips_reversed_markers(self):
+        with tempfile.TemporaryDirectory() as td:
+            note = Path(td) / "User Note.md"
+            original = "\n".join(
+                [
+                    "# User Note",
+                    "",
+                    obsidian.RELATED_END,
+                    "- [[Old Paper]]",
+                    obsidian.RELATED_START,
+                    "",
+                ]
+            )
+            note.write_text(original, encoding="utf-8")
+
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                changed = obsidian.update_related_in_file(note, ["New Paper"])
+
+            self.assertFalse(changed)
+            self.assertIn("markers out of order", stdout.getvalue())
+            self.assertEqual(note.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":

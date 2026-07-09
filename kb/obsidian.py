@@ -434,22 +434,30 @@ def update_related_in_file(path: Path, related_links: list[str]) -> bool:
     original = _read_text_tolerant(path)
     block = _related_block(related_links)
 
-    has_start = RELATED_START in original
-    has_end = RELATED_END in original
-    if has_start and has_end:
-        updated = re.sub(
-            re.escape(RELATED_START) + r".*?" + re.escape(RELATED_END),
+    start_count = original.count(RELATED_START)
+    end_count = original.count(RELATED_END)
+    if start_count == 1 and end_count == 1:
+        pattern = re.escape(RELATED_START) + r".*?" + re.escape(RELATED_END)
+        updated, replacements = re.subn(
+            pattern,
             lambda _m: block,
             original,
             count=1,
             flags=re.DOTALL,
         )
-    elif has_start or has_end:
-        # One marker was (probably hand-)deleted; appending a fresh block
-        # would duplicate the section forever. Leave the note alone.
+        if replacements != 1:
+            print(
+                f"  ! related-links block in '{path.name}' has markers out of "
+                "order; skipping update.",
+                flush=True,
+            )
+            return False
+    elif start_count or end_count:
+        # A marker was hand-edited or duplicated. Appending or partially
+        # updating would leave stale managed links in the graph.
         print(
-            f"  ! related-links block in '{path.name}' has a missing "
-            f"{'end' if has_start else 'start'} marker; skipping update.",
+            f"  ! related-links block in '{path.name}' has {start_count} "
+            f"start marker(s) and {end_count} end marker(s); skipping update.",
             flush=True,
         )
         return False
