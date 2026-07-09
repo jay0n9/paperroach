@@ -50,6 +50,8 @@ _INT_FIELDS = {
     "nougat_batchsize",
     "watch_interval",
 }
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
 
 
 @dataclass
@@ -127,7 +129,10 @@ class Config:
 def _find_config_file(overrides: dict) -> Path | None:
     candidates: list[Path] = []
     if os.environ.get("KB_CONFIG"):
-        candidates.append(Path(os.environ["KB_CONFIG"]))
+        explicit = Path(os.environ["KB_CONFIG"])
+        if not explicit.is_file():
+            raise ConfigError(f"KB_CONFIG points to a missing file: {explicit}")
+        return explicit
     candidates.append(Path.cwd() / "kb.toml")
     # A vault may carry its own kb.toml; consider it if we know the vault.
     vault = overrides.get("vault_path") or os.environ.get("KB_VAULT")
@@ -145,9 +150,20 @@ def _coerce(field_name: str, value):
     if field_name in _BOOL_FIELDS:
         if isinstance(value, bool):
             return value
-        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+        normalized = str(value).strip().lower()
+        if normalized in _TRUE_VALUES:
+            return True
+        if normalized in _FALSE_VALUES:
+            return False
+        raise ConfigError(
+            f"Invalid boolean for {field_name}: {value!r}. "
+            "Use true/false, yes/no, on/off, or 1/0."
+        )
     if field_name in _INT_FIELDS:
-        return int(value)
+        try:
+            return int(value)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(f"Invalid integer for {field_name}: {value!r}") from exc
     return value
 
 
@@ -165,8 +181,11 @@ def load_config(overrides: dict | None = None) -> Config:
     # 3. file
     cfg_file = _find_config_file(overrides)
     if cfg_file is not None:
-        with cfg_file.open("rb") as fh:
-            data = tomllib.load(fh)
+        try:
+            with cfg_file.open("rb") as fh:
+                data = tomllib.load(fh)
+        except tomllib.TOMLDecodeError as exc:
+            raise ConfigError(f"Invalid TOML in {cfg_file}: {exc}") from exc
         for k, v in data.items():
             if k in valid:
                 merged[k] = v

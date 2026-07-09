@@ -85,6 +85,9 @@ Configuration precedence:
 CLI flags > KB_* environment variables > kb.toml > built-in defaults
 ```
 
+If `KB_CONFIG` is set, it must point to an existing TOML file. Invalid TOML,
+boolean, and integer values fail fast with field-specific configuration errors.
+
 Generated note prose and RAG answers default to English. You can change this in
 `kb.toml` with `note_language` and `answer_language`.
 
