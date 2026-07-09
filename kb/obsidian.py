@@ -377,7 +377,7 @@ def _existing_date(note_path: Path | None):
 
 
 _MY_NOTES_RE = re.compile(
-    r"(?ms)^## My Notes\s*\n(.*?)(?=^## |^---\s*$|\Z)"
+    r"(?ms)^## My Notes[ \t]*\r?\n(.*?)(?=^---[ \t]*\r?\n# References[ \t]*$|^# References[ \t]*$|\Z)"
 )
 
 

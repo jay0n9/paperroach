@@ -338,16 +338,28 @@ def classify_paper(
     parts.append("\nReturn the classification JSON now.")
     obj = client.generate_json(system, "\n\n".join(parts))
     fallback_text = "\n".join(parts)
-    metadata_text = "\n".join(
-        [
-            metadata.title,
-            " ".join(metadata.tags),
-            metadata.venue,
-            metadata.venue_type,
-            metadata.doi,
-        ]
-    )
+    metadata_text = _classification_metadata_text(metadata)
     return _coerce_classification(obj, candidates, fallback_text, metadata_text)
+
+
+def _classification_metadata_text(metadata: PaperMetadata) -> str:
+    """Metadata-only classification signal, evaluated before model/body cues."""
+    pieces = [
+        metadata.title,
+        " ".join(metadata.tags),
+        metadata.summary,
+        metadata.methods,
+        " ".join(str(item) for item in metadata.key_contributions),
+        metadata.venue,
+        metadata.venue_type,
+        metadata.doi,
+        metadata.source_url,
+        metadata.volume,
+        metadata.issue,
+        metadata.pages,
+        metadata.publisher,
+    ]
+    return "\n".join(str(piece) for piece in pieces if piece)
 
 
 def _s(value) -> str:

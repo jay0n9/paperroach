@@ -1,0 +1,128 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from kb.config import Config
+from kb.models import Document, PaperAnalysis, PaperMetadata
+from kb import obsidian
+
+
+def _existing_note_text(my_notes: str) -> str:
+    return (
+        "---\n"
+        "Date: 2026-07-10\n"
+        "Type:\n"
+        "- Paper\n"
+        "kb-generated: true\n"
+        "---\n"
+        "# Existing Paper\n"
+        "\n"
+        "## TL;DR\n"
+        "\n"
+        "Old summary.\n"
+        "\n"
+        "## My Notes\n"
+        "\n"
+        f"{my_notes.rstrip()}\n"
+        "\n"
+        "---\n"
+        "# References\n"
+        "\n"
+        "- Old reference\n"
+    )
+
+
+class ObsidianNoteTests(unittest.TestCase):
+    def test_existing_my_notes_preserves_subheadings_and_horizontal_rules(self):
+        with tempfile.TemporaryDirectory() as td:
+            note = Path(td) / "Existing Paper.md"
+            my_notes = "\n".join(
+                [
+                    "First personal observation.",
+                    "",
+                    "## Follow-up Question",
+                    "",
+                    "- Does this connect to my current experiment?",
+                    "",
+                    "---",
+                    "",
+                    "More notes after a horizontal rule.",
+                ]
+            )
+            note.write_text(_existing_note_text(my_notes), encoding="utf-8")
+
+            extracted = obsidian.extract_my_notes(note)
+
+            self.assertEqual(extracted, my_notes)
+
+    def test_render_note_keeps_existing_my_notes_across_rebuild(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            note = root / "References" / "Existing Paper (2024).md"
+            note.parent.mkdir(parents=True)
+            my_notes = "\n".join(
+                [
+                    "Keep this note.",
+                    "",
+                    "## My Subtopic",
+                    "",
+                    "A detail I wrote myself.",
+                    "",
+                    "---",
+                    "",
+                    "Another personal block.",
+                ]
+            )
+            note.write_text(_existing_note_text(my_notes), encoding="utf-8")
+            doc = Document(
+                doc_id="abc123abc123",
+                source_path=root / "paper.pdf",
+                kind="pdf",
+                markdown="",
+                metadata=PaperMetadata(title="Existing Paper", year=2024),
+                analysis=PaperAnalysis(tl_dr="Fresh generated summary."),
+            )
+            doc.note_path = note
+            config = Config(vault_path=root, references_dir="References", kb_dir=".kb")
+
+            rendered = obsidian.render_note(doc, ["Related Paper"], config)
+
+            self.assertIn("## My Notes\n\n" + my_notes + "\n\n---\n# References", rendered)
+            self.assertIn("Fresh generated summary.", rendered)
+            self.assertNotIn("Old summary.", rendered)
+
+    def test_update_related_in_file_preserves_surrounding_user_content(self):
+        with tempfile.TemporaryDirectory() as td:
+            note = Path(td) / "User Note.md"
+            note.write_text(
+                "\n".join(
+                    [
+                        "# User Note",
+                        "",
+                        "Before block.",
+                        "",
+                        "## Related Papers",
+                        "",
+                        obsidian.RELATED_START,
+                        "- [[Old Paper]]",
+                        obsidian.RELATED_END,
+                        "",
+                        "After block.",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            changed = obsidian.update_related_in_file(note, ["New Paper"])
+            text = note.read_text(encoding="utf-8")
+
+            self.assertTrue(changed)
+            self.assertIn("Before block.", text)
+            self.assertIn("After block.", text)
+            self.assertIn("- [[New Paper]]", text)
+            self.assertNotIn("Old Paper", text)
+
+
+if __name__ == "__main__":
+    unittest.main()
