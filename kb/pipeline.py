@@ -544,9 +544,9 @@ def refile_references(
     """File generated paper notes into ``<references>/<Domain>/<Subdomain>/``.
 
     The subject is derived without the LLM, in this order:
-    explicit frontmatter ``Domain``/``Subdomain`` -> metadata fields such as
-    tags, venue, DOI/source, and title -> compact body sections -> concept
-    majority vote.
+    explicit frontmatter ``Subdomain`` -> metadata fields such as tags, venue,
+    DOI/source, and title -> explicit/frontmatter ``Domain`` -> compact body
+    sections -> concept majority vote.
     Wikilinks resolve by basename, so moving notes is link-safe; the store's
     ``note_path`` rows are updated to follow.
     """
@@ -795,7 +795,7 @@ def _note_metadata_text(note: Path, fm: dict) -> str:
         note.stem,
         str(fm.get("Domain") or ""),
         str(fm.get("Subdomain") or ""),
-        " ".join(str(t) for t in (fm.get("tags") or [])),
+        " ".join(_frontmatter_values(fm.get("tags"))),
         str(fm.get("Venue") or ""),
         str(fm.get("Venue Type") or ""),
         str(fm.get("DOI") or ""),
@@ -806,6 +806,17 @@ def _note_metadata_text(note: Path, fm: dict) -> str:
         str(fm.get("Publisher") or ""),
     ]
     return "\n\n".join(p for p in pieces if p)
+
+
+def _frontmatter_values(value) -> list[str]:
+    """Normalize scalar or sequence frontmatter values into text values."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    elif not isinstance(value, (list, tuple, set)):
+        value = [value]
+    return [str(item).strip() for item in value if str(item).strip()]
 
 
 def _note_body_classification_text(note: Path, text: str | None = None) -> str:
