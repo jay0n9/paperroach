@@ -1,7 +1,8 @@
 import unittest
 
 from kb import llm
-from kb.models import PaperMetadata
+from kb.models import PaperAnalysis, PaperMetadata
+from kb.pipeline import _fallback_paper_classification
 
 
 class LLMClassificationTests(unittest.TestCase):
@@ -16,7 +17,7 @@ class LLMClassificationTests(unittest.TestCase):
             venue_type="conferencePaper",
             source_url="https://example.org/asafeplace",
         )
-        metadata_text = llm._classification_metadata_text(metadata)
+        metadata_text = llm.classification_metadata_text(metadata)
 
         cls = llm._coerce_classification(
             {"primary_domain": "HCI", "subdomain": "VR/AR Interaction"},
@@ -45,11 +46,36 @@ class LLMClassificationTests(unittest.TestCase):
             publisher="ACM",
         )
 
-        text = llm._classification_metadata_text(metadata)
+        text = llm.classification_metadata_text(metadata)
 
         self.assertIn("computer graphics reconstruction", text)
         self.assertIn("3d morphable face model", text)
         self.assertIn("https://doi.org/10.0000/example", text)
+
+    def test_pipeline_fallback_keeps_metadata_priority_when_classifier_fails(self):
+        metadata = PaperMetadata(
+            title="ASafePlace",
+            summary="VR relaxation support for anxiety and wellbeing.",
+            methods="participant study with qualitative feedback in an art therapy task",
+            tags=["paper", "hci"],
+            venue="CHI",
+            venue_type="conferencePaper",
+        )
+        analysis = PaperAnalysis(
+            approach=(
+                "The approach section mentions diffusion, mesh generation, "
+                "neural rendering, multiple testing, and statistical inference."
+            )
+        )
+
+        cls = _fallback_paper_classification(
+            metadata,
+            analysis,
+            ["Computer Science", "Generative AI", "HCI", "Statistics"],
+        )
+
+        self.assertEqual(cls.primary_domain, "HCI")
+        self.assertEqual(cls.subdomain, "Health & Wellbeing")
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ from kb.chunk import chunk_markdown
 from kb.config import Config
 from kb.llm import (
     classify_paper,
+    classification_metadata_text,
     extract_analysis,
     extract_concepts,
     extract_metadata,
@@ -42,6 +43,7 @@ from kb.models import (
     Document,
     PaperAnalysis,
     PaperClassification,
+    PaperMetadata,
     content_hash_for,
     doc_id_for,
 )
@@ -232,40 +234,13 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                         client, markdown, metadata, analysis, config, known_subjects
                     )
                 except Exception as exc:
-                    fallback = taxonomy.classify_text_heuristic(
-                        "\n".join(
-                            [
-                                metadata.title,
-                                " ".join(metadata.tags),
-                                metadata.summary,
-                                metadata.methods,
-                                analysis.tl_dr,
-                                analysis.problem_motivation,
-                                analysis.approach,
-                                analysis.key_results,
-                            ]
-                        ),
-                        known_subjects,
+                    classification = _fallback_paper_classification(
+                        metadata, analysis, known_subjects
                     )
-                    subdomain = taxonomy.classify_subdomain_heuristic(
-                        "\n".join(
-                            [
-                                metadata.title,
-                                " ".join(metadata.tags),
-                                metadata.summary,
-                                metadata.methods,
-                                analysis.tl_dr,
-                                analysis.problem_motivation,
-                                analysis.approach,
-                                analysis.key_results,
-                            ]
-                        ),
-                        fallback,
+                    _log(
+                        "      · domain classification failed "
+                        f"({exc}); fallback={classification.primary_domain or 'none'}"
                     )
-                    classification = PaperClassification(
-                        primary_domain=fallback, subdomain=subdomain
-                    )
-                    _log(f"      · domain classification failed ({exc}); fallback={fallback or 'none'}")
                 if classification.primary_domain:
                     _log(f"      · primary domain: {classification.primary_domain}")
                 if classification.subdomain:
@@ -452,6 +427,45 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
         "succeeded": [d.doc_id for d in docs],
         "skipped_duplicates": dup_ids,
     }
+
+
+def _fallback_paper_classification(
+    metadata: PaperMetadata, analysis: PaperAnalysis, known_subjects: list[str]
+) -> PaperClassification:
+    """Best-effort paper filing when the LLM classification call fails.
+
+    Keep the same priority as the normal classifier: metadata-derived
+    subdomain/domain first, then analysis/body cues only as a fallback.
+    """
+    metadata_text = classification_metadata_text(metadata)
+    metadata_domain, metadata_subdomain = taxonomy.classify_subdomain_any(metadata_text)
+    primary = taxonomy.normalize_domain(metadata_domain, known_subjects)
+    if not primary:
+        primary = taxonomy.classify_text_heuristic(metadata_text, known_subjects)
+
+    fallback_text = "\n".join(
+        piece
+        for piece in (
+            metadata_text,
+            analysis.tl_dr,
+            analysis.problem_motivation,
+            analysis.approach,
+            analysis.key_results,
+        )
+        if piece
+    )
+    if not primary:
+        primary = taxonomy.classify_text_heuristic(fallback_text, known_subjects)
+
+    subdomain = ""
+    if primary and metadata_subdomain and metadata_domain.lower() == primary.lower():
+        subdomain = metadata_subdomain
+    if not subdomain and primary:
+        subdomain = taxonomy.classify_subdomain_heuristic(metadata_text, primary)
+    if not subdomain and primary:
+        subdomain = taxonomy.classify_subdomain_heuristic(fallback_text, primary)
+
+    return PaperClassification(primary_domain=primary, subdomain=subdomain)
 
 
 def _dedupe_by_content(
