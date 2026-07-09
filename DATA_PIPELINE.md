@@ -48,6 +48,7 @@ Generated notes are skipped on re-ingest if their frontmatter contains
 | Bibliographic venue metadata | `Venue`, `Venue Type`, `DOI`, `Volume`, `Issue`, `Pages`, `Publisher` frontmatter | `kb/zotero.py`, `kb/obsidian.py` |
 | Tag registry | `<vault>/<tags_dir>/Tag Registry.md` | `kb/tags.py` |
 | Vector store | `<kb_path>` | `kb/store.py` |
+| Store metadata | `<kb_path>/store_meta.json` | `kb/store.py` |
 | Content hash ledger | `<kb_path>/content_hashes.json` | `kb/pipeline.py` |
 | Pipeline write lock | `<kb_path>/pipeline.lock` | `kb/pipeline.py`, `kb/cli.py` |
 | Watcher log | User-managed terminal or service log | Local watcher wrapper |
@@ -287,7 +288,14 @@ LanceDB tables:
 | `chunks` | Chunk text and vectors for search/RAG | `doc_id`, `chunk_index` |
 | `concepts` | Concept-note vectors for related-concept links | `concept_id` |
 
-Vector width is checked against `config.embed_dim` when tables are opened.
+Vector compatibility is checked before the tables are opened:
+
+- `store_meta.json` records PaperRoach's store schema version, `embed_model`,
+  and `embed_dim`.
+- Existing LanceDB vector width is also checked against `config.embed_dim`.
+- Changing the embedding model or schema requires restoring the previous config
+  or rebuilding/migrating `<kb_path>`, because same-width vectors from different
+  models are not comparable.
 
 ### 5.8 Related Paper Links
 
@@ -654,6 +662,7 @@ batch. Important boundaries:
 
 ## 14. Recommended Next Improvements
 
-1. Add a small changelog template for user-facing releases.
-2. Add a schema/version note for future LanceDB or generated-frontmatter
-   migrations.
+1. Add migration tooling if a future LanceDB/frontmatter schema change needs
+   in-place upgrades instead of rebuilds.
+2. Add release automation for publishing GitHub Release artifacts from tagged
+   builds.

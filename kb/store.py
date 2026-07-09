@@ -9,6 +9,8 @@ the Ollama client, so cosine and inner-product rank identically.
 """
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
 import lancedb
@@ -16,6 +18,9 @@ import pyarrow as pa
 
 from kb.config import Config
 from kb.models import Document
+
+STORE_SCHEMA_VERSION = 1
+_META_NAME = "store_meta.json"
 
 
 def _chunks_schema(dim: int) -> pa.Schema:
@@ -62,16 +67,84 @@ def _concepts_schema(dim: int) -> pa.Schema:
     )
 
 
+def _store_meta_path(config: Config) -> Path:
+    return config.kb_path / _META_NAME
+
+
+def _expected_store_meta(config: Config) -> dict[str, object]:
+    return {
+        "schema_version": STORE_SCHEMA_VERSION,
+        "embed_model": config.embed_model,
+        "embed_dim": config.embed_dim,
+    }
+
+
+def _load_store_meta(config: Config) -> dict:
+    path = _store_meta_path(config)
+    if not path.exists():
+        return {}
+    try:
+        with path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid store metadata at {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Invalid store metadata at {path}: expected a JSON object")
+    return data
+
+
+def _save_store_meta(config: Config) -> None:
+    path = _store_meta_path(config)
+    expected = _expected_store_meta(config)
+    if path.exists() and _load_store_meta(config) == expected:
+        return
+    tmp = path.with_name(f".{path.name}.tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp.write_text(json.dumps(expected, indent=1), encoding="utf-8")
+    os.replace(tmp, path)
+
+
 class KBStore:
     def __init__(self, config: Config):
         self.config = config
         config.kb_path.mkdir(parents=True, exist_ok=True)
+        self._check_store_meta()
         self.db = lancedb.connect(str(config.kb_path))
         self.chunks = self._open_or_create("chunks", _chunks_schema(config.embed_dim))
         self.docs = self._open_or_create("docs", _docs_schema(config.embed_dim))
         self.concepts = self._open_or_create(
             "concepts", _concepts_schema(config.embed_dim)
         )
+        self._save_store_meta()
+
+    def _check_store_meta(self) -> None:
+        meta = _load_store_meta(self.config)
+        if not meta:
+            return
+        schema_version = meta.get("schema_version")
+        if schema_version != STORE_SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Store metadata schema_version is {schema_version!r}, but "
+                f"PaperRoach expects {STORE_SCHEMA_VERSION}. Rebuild or migrate "
+                f"the store at {self.config.kb_path}."
+            )
+        stored_dim = meta.get("embed_dim")
+        if stored_dim is not None and stored_dim != self.config.embed_dim:
+            raise RuntimeError(
+                f"Store metadata records embed_dim={stored_dim}, but config uses "
+                f"embed_dim={self.config.embed_dim}. Restore the previous embed "
+                f"settings or rebuild {self.config.kb_path}."
+            )
+        stored_model = str(meta.get("embed_model") or "")
+        if stored_model and stored_model != self.config.embed_model:
+            raise RuntimeError(
+                f"Store metadata records embed_model={stored_model!r}, but config "
+                f"uses {self.config.embed_model!r}. Restore the previous embed "
+                f"model or rebuild {self.config.kb_path}."
+            )
+
+    def _save_store_meta(self) -> None:
+        _save_store_meta(self.config)
 
     def _open_or_create(self, name: str, schema: pa.Schema):
         if name in _table_names(self.db):

@@ -15,6 +15,7 @@ Update both version sources in the same commit:
 
 - `pyproject.toml` -> `[project].version`
 - `kb/__init__.py` -> `__version__`
+- `CHANGELOG.md` -> move user-facing changes from `Unreleased` into the release
 
 The test suite checks that these two values match.
 
@@ -32,13 +33,17 @@ python -m paperroach --version
 For a release that changes ingestion, Zotero enrichment, note rendering, or the
 LanceDB store, also run one manual build against a disposable vault.
 
+If the release changes LanceDB table schemas, generated frontmatter fields, or
+embedding compatibility, document whether users must rebuild `<vault>/.kb` or
+can run an in-place migration.
+
 ## Tagging
 
 Create the version commit first, then tag that exact commit:
 
 ```bash
 git status --short
-git add pyproject.toml kb/__init__.py RELEASE.md
+git add pyproject.toml kb/__init__.py CHANGELOG.md RELEASE.md
 git commit -m "Release 0.1.1"
 git tag -a v0.1.1 -m "PaperRoach 0.1.1"
 git push origin main

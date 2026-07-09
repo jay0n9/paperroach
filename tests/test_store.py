@@ -1,13 +1,79 @@
 import tempfile
 import unittest
 import warnings
+import json
 from pathlib import Path
+from unittest.mock import patch
 
 from kb.config import Config
-from kb.store import KBStore
+from kb.store import KBStore, STORE_SCHEMA_VERSION, _store_meta_path
 
 
 class StoreTests(unittest.TestCase):
+    def test_store_initialization_writes_metadata(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = Config(
+                vault_path=Path(td) / "vault",
+                kb_dir=".kb",
+                embed_model="test-embedder",
+                embed_dim=3,
+            )
+
+            KBStore(cfg)
+
+            meta = json.loads(_store_meta_path(cfg).read_text(encoding="utf-8"))
+            self.assertEqual(
+                meta,
+                {
+                    "schema_version": STORE_SCHEMA_VERSION,
+                    "embed_model": "test-embedder",
+                    "embed_dim": 3,
+                },
+            )
+
+    def test_store_rejects_same_dimension_different_embedding_model(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "vault"
+            cfg = Config(
+                vault_path=root,
+                kb_dir=".kb",
+                embed_model="first-model",
+                embed_dim=3,
+            )
+            KBStore(cfg)
+
+            changed = Config(
+                vault_path=root,
+                kb_dir=".kb",
+                embed_model="second-model",
+                embed_dim=3,
+            )
+            with self.assertRaises(RuntimeError) as raised:
+                KBStore(changed)
+
+            self.assertIn("embed_model='first-model'", str(raised.exception))
+
+    def test_store_does_not_rewrite_matching_metadata_on_reopen(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = Config(vault_path=Path(td) / "vault", kb_dir=".kb", embed_dim=3)
+            KBStore(cfg)
+
+            with patch("kb.store.os.replace") as replace:
+                KBStore(cfg)
+
+            replace.assert_not_called()
+
+    def test_store_rejects_invalid_metadata_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = Config(vault_path=Path(td) / "vault", kb_dir=".kb", embed_dim=3)
+            cfg.kb_path.mkdir(parents=True)
+            _store_meta_path(cfg).write_text("{not json", encoding="utf-8")
+
+            with self.assertRaises(RuntimeError) as raised:
+                KBStore(cfg)
+
+            self.assertIn("Invalid store metadata", str(raised.exception))
+
     def test_store_initialization_avoids_deprecated_table_names_warning(self):
         with tempfile.TemporaryDirectory() as td:
             cfg = Config(vault_path=Path(td) / "vault", kb_dir=".kb")

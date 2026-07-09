@@ -285,6 +285,10 @@ test that exercises the real local store without requiring a live Ollama server.
 
 Release and versioning steps are documented in `RELEASE.md`.
 
+The vector store writes `.kb/store_meta.json` with the store schema version,
+embedding model, and embedding dimension. If you change `embed_model` or
+`embed_dim`, rebuild the store instead of reusing incompatible vectors.
+
 ## PDF Parsing
 
 The default PDF backend is `pymupdf4llm` on CPU. Scanned PDFs can fall back to
