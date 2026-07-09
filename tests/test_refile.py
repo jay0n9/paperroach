@@ -178,6 +178,52 @@ class RefilePlanTests(unittest.TestCase):
             self.assertIn("Computer Science/Computer Graphics/Scalar Tag Paper (2024).md", text)
             self.assertIn("| metadata |", text)
 
+    def test_lowercase_venue_frontmatter_is_metadata_signal(self):
+        with tempfile.TemporaryDirectory() as td:
+            vault = Path(td) / "vault"
+            cfg = Config(vault_path=vault, references_dir="References", kb_dir=".kb")
+            note = cfg.references_path / "Lowercase Venue Paper (2024).md"
+            note.parent.mkdir(parents=True, exist_ok=True)
+            note.write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "Date: 2026-07-10",
+                        "Type:",
+                        "- Paper",
+                        "Status: Unread",
+                        "Authors: Test Author",
+                        "Year: 2024",
+                        "venue: ACM Transactions on Graphics",
+                        "venue_type: journalArticle",
+                        "Tags:",
+                        "- paper",
+                        "kb-generated: true",
+                        "kb-source: C:/papers/lowercase.pdf",
+                        "kb-doc-id: lowercase123",
+                        "---",
+                        "# Lowercase Venue Paper",
+                        "",
+                        "## TL;DR",
+                        "",
+                        "The body emphasizes interviews and participant feedback.",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            plan = Path(td) / "refile-plan.md"
+
+            result = _refile_quietly(cfg, apply=False, plan_out=plan)
+
+            self.assertEqual(result["planned"], 1)
+            text = plan.read_text(encoding="utf-8")
+            self.assertIn(
+                "Computer Science/Computer Graphics/Lowercase Venue Paper (2024).md",
+                text,
+            )
+            self.assertIn("| metadata |", text)
+
 
 if __name__ == "__main__":
     unittest.main()

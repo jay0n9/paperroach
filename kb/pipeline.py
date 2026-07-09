@@ -672,7 +672,7 @@ def _paper_filing_for_note(
             "source": "metadata",
         }
     for key in ("Domain", "primary_domain", "Primary Domain"):
-        value = fm.get(key)
+        value = _frontmatter_get(fm, key)
         if isinstance(value, str) and value.strip():
             domain = taxonomy.normalize_domain(value, candidates)
             subdomain = _frontmatter_subdomain(fm, domain)
@@ -783,7 +783,7 @@ def _md_cell(value: str) -> str:
 
 def _frontmatter_subdomain(fm: dict, domain: str = "") -> str:
     for key in ("Subdomain", "subdomain", "Primary Subdomain"):
-        value = fm.get(key)
+        value = _frontmatter_get(fm, key)
         if isinstance(value, str) and value.strip():
             return taxonomy.normalize_subdomain(value, domain)
     return ""
@@ -793,19 +793,39 @@ def _note_metadata_text(note: Path, fm: dict) -> str:
     """Metadata-only signal for filing. This has priority over body text."""
     pieces = [
         note.stem,
-        str(fm.get("Domain") or ""),
-        str(fm.get("Subdomain") or ""),
-        " ".join(_frontmatter_values(fm.get("tags"))),
-        str(fm.get("Venue") or ""),
-        str(fm.get("Venue Type") or ""),
-        str(fm.get("DOI") or ""),
-        str(fm.get("Source") or ""),
-        str(fm.get("Volume") or ""),
-        str(fm.get("Issue") or ""),
-        str(fm.get("Pages") or ""),
-        str(fm.get("Publisher") or ""),
+        _frontmatter_text(fm, "Domain", "primary_domain", "Primary Domain"),
+        _frontmatter_text(fm, "Subdomain", "Primary Subdomain"),
+        _frontmatter_text(fm, "tags", "Tags"),
+        _frontmatter_text(fm, "Venue", "venue"),
+        _frontmatter_text(fm, "Venue Type", "venue_type", "itemType"),
+        _frontmatter_text(fm, "DOI", "doi"),
+        _frontmatter_text(fm, "Source", "source_url", "url", "URL"),
+        _frontmatter_text(fm, "Volume", "volume"),
+        _frontmatter_text(fm, "Issue", "issue"),
+        _frontmatter_text(fm, "Pages", "pages"),
+        _frontmatter_text(fm, "Publisher", "publisher"),
     ]
     return "\n\n".join(p for p in pieces if p)
+
+
+def _frontmatter_text(fm: dict, *keys: str) -> str:
+    return " ".join(_frontmatter_values(_frontmatter_get(fm, *keys)))
+
+
+def _frontmatter_get(fm: dict, *keys: str):
+    """Return a frontmatter value, matching common casing/spacing variants."""
+    if not isinstance(fm, dict):
+        return None
+    lookup = {_frontmatter_key(k): v for k, v in fm.items()}
+    for key in keys:
+        norm = _frontmatter_key(key)
+        if norm in lookup:
+            return lookup[norm]
+    return None
+
+
+def _frontmatter_key(key: object) -> str:
+    return re.sub(r"[\s_\-]+", "", str(key or "").strip().lower())
 
 
 def _frontmatter_values(value) -> list[str]:
