@@ -72,6 +72,92 @@ class ConfigLoadingTests(unittest.TestCase):
 
             self.assertIn("Invalid integer for embed_dim", str(raised.exception))
 
+    def test_invalid_semantic_values_fail_before_pipeline_execution(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            cfg = root / "kb.toml"
+            cfg.write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{vault.as_posix()}"',
+                        "chunk_size = 0",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            os.environ["KB_CONFIG"] = str(cfg)
+
+            with self.assertRaises(ConfigError) as raised:
+                load_config()
+
+            self.assertIn("chunk_size must be at least 1", str(raised.exception))
+
+    def test_overlap_must_be_smaller_than_chunk_size(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            cfg = root / "kb.toml"
+            cfg.write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{vault.as_posix()}"',
+                        "chunk_size = 100",
+                        "chunk_overlap = 100",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            os.environ["KB_CONFIG"] = str(cfg)
+
+            with self.assertRaises(ConfigError) as raised:
+                load_config()
+
+            self.assertIn("chunk_overlap must be smaller", str(raised.exception))
+
+    def test_output_directories_must_stay_inside_vault(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            cfg = root / "kb.toml"
+            cfg.write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{vault.as_posix()}"',
+                        'references_dir = "../outside"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            os.environ["KB_CONFIG"] = str(cfg)
+
+            with self.assertRaises(ConfigError) as raised:
+                load_config()
+
+            self.assertIn("references_dir must be a relative path", str(raised.exception))
+
+    def test_embed_dim_environment_override_is_coerced(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            os.environ["KB_VAULT"] = str(vault)
+            os.environ["KB_EMBED_DIM"] = "3"
+
+            try:
+                os.chdir(root)
+                config = load_config()
+            finally:
+                os.chdir(self._cwd)
+
+            self.assertEqual(config.embed_dim, 3)
+
     def test_invalid_toml_reports_config_path(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

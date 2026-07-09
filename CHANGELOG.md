@@ -11,12 +11,21 @@ release. Follow semantic versioning and keep entries short enough to scan.
 - Store metadata validation for schema version, embedding model, and embedding
   dimension compatibility.
 - Release checklist and changelog template.
+- Contributor, governance, code-of-conduct, security, citation, CODEOWNERS,
+  issue-form, pull-request, and Dependabot foundations for public development.
+- Isolated wheel-install smoke testing in CI.
 
 ### Changed
 
 - Metadata extraction now preserves explicit `Domain` and `Subdomain` fields
   before classifier or body-text fallback cues are considered.
 - Documented vector store compatibility and future migration expectations.
+- `paperroach init` now loads its configuration template from packaged data, so
+  installed wheels generate the full documented configuration file.
+- Long-running write locks now heartbeat automatically; the Zotero watcher
+  only holds a writer lock while it is actually building a batch.
+- Configuration now rejects invalid pipeline sizes, unsafe vault-relative
+  output paths, and unknown PDF ingesters before work starts.
 
 ### Fixed
 
@@ -27,6 +36,10 @@ release. Follow semantic versioning and keep entries short enough to scan.
   store does not exist yet.
 - `paperroach stats` now validates existing store metadata compatibility
   without creating or rewriting store files.
+- Generated and managed Markdown updates now use atomic replacement writes.
+- `gc --apply` now deletes only generated PDF duplicates whose current source
+  bytes match exactly; same-title/year papers remain review-only candidates.
+- Content-hash ledger updates now retire stale hashes when a source file changes.
 
 ### Migration Notes
 

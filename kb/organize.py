@@ -19,7 +19,12 @@ from pathlib import Path
 
 from kb.config import Config
 from kb.knowledge import _batches, _safe_folder, list_subjects
-from kb.obsidian import _read_text_tolerant, is_generated_note, split_frontmatter
+from kb.obsidian import (
+    _read_text_tolerant,
+    is_generated_note,
+    split_frontmatter,
+    write_text_atomic,
+)
 from kb.ollama_client import OllamaClient
 
 MOC_SUFFIX = " MOC"
@@ -378,7 +383,7 @@ def _write_moc(folder: Path, note_names: list[str], sub_mocs: list[str]) -> bool
             + "\ntags:\n- MOC\nkb-generated: true\n---\n"
         )
         new = f"{fm}# {folder.name}\n---\n\n{block}\n"
-    moc_path.write_text(new, encoding="utf-8")
+    write_text_atomic(moc_path, new)
     return True
 
 
@@ -397,4 +402,4 @@ def _update_subject(path: Path, subject: str) -> None:
     if replacements == 0:
         new_fm = fm_text.rstrip() + f"\nSubject: {subject}"
     if new_fm != fm_text:
-        path.write_text(f"---\n{new_fm}\n---\n{body}", encoding="utf-8")
+        write_text_atomic(path, f"---\n{new_fm}\n---\n{body}")

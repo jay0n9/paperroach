@@ -28,7 +28,9 @@ _ASK_SYSTEM = (
 
 
 def search(query: str, config: Config, k: int | None = None) -> list[dict]:
-    k = k or config.rag_top_k
+    k = config.rag_top_k if k is None else k
+    if k < 1:
+        raise ValueError(f"k must be at least 1 (got {k})")
     if "chunks" not in store_mod.table_names(config):
         return []
     client = OllamaClient(config)
@@ -53,7 +55,9 @@ def format_search_results(rows: list[dict]) -> str:
 
 
 def ask(query: str, config: Config, k: int | None = None) -> dict:
-    k = k or config.rag_top_k
+    k = config.rag_top_k if k is None else k
+    if k < 1:
+        raise ValueError(f"k must be at least 1 (got {k})")
     if "chunks" not in store_mod.table_names(config):
         return {
             "answer": "No relevant evidence was found in the knowledge library.",

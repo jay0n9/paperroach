@@ -83,7 +83,7 @@ paperroach init --vault "C:/Users/you/Documents/MyVault"
 ```
 
 This creates `References/` and `.kb/` in your vault and writes `kb.toml` in the
-current directory. See `kb.example.toml` for all options.
+current directory. See `kb/templates/kb.example.toml` for all options.
 
 Configuration precedence:
 
@@ -282,7 +282,7 @@ is provided.
 ## Development Checks
 
 Pull requests run the same checks on GitHub Actions for Python 3.11 and 3.12
-on Linux and Windows.
+on Linux, macOS, and Windows.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -299,6 +299,15 @@ Release and versioning steps are documented in `RELEASE.md`.
 The vector store writes `.kb/store_meta.json` with the store schema version,
 embedding model, and embedding dimension. If you change `embed_model` or
 `embed_dim`, rebuild the store instead of reusing incompatible vectors.
+
+## Community
+
+PaperRoach is an early public project and welcomes focused contributions. Read
+`CONTRIBUTING.md` for local setup, test expectations, and data-safety rules.
+Community standards are in `CODE_OF_CONDUCT.md`; responsible disclosure is in
+`SECURITY.md`; maintainer decision-making is described in `GOVERNANCE.md`.
+
+If you use PaperRoach in research, see `CITATION.cff`.
 
 ## PDF Parsing
 
@@ -327,6 +336,7 @@ paperroach build "paper.pdf" --ingester nougat
 ```text
 kb/
   cli.py             command-line interface
+  templates/          packaged `paperroach init` configuration template
   pipeline.py        build, watch, relink, refile, retag, gc
   ingest.py          PDF / Markdown ingestion
   llm.py             LLM prompts and JSON coercion
@@ -337,6 +347,8 @@ kb/
   rag.py             search and grounded question answering
 paperroach/
   __main__.py        package alias for `python -m paperroach`
+scripts/
+  smoke_wheel.py      isolated wheel-install smoke test
 ```
 
 ## License

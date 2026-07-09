@@ -23,6 +23,7 @@ _ENV = {
     "ollama_host": "KB_OLLAMA_HOST",
     "llm_model": "KB_LLM_MODEL",
     "embed_model": "KB_EMBED_MODEL",
+    "embed_dim": "KB_EMBED_DIM",
     "keep_alive": "KB_KEEP_ALIVE",
     "ingester": "KB_INGESTER",
     "zotero_dir": "KB_ZOTERO_DIR",
@@ -52,6 +53,20 @@ _INT_FIELDS = {
 }
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off"}
+_POSITIVE_INT_FIELDS = {
+    "llm_num_ctx",
+    "embed_dim",
+    "meta_input_chars",
+    "analysis_input_chars",
+    "chunk_size",
+    "related_top_k",
+    "rag_top_k",
+    "ocr_dpi",
+    "watch_interval",
+}
+_NONNEGATIVE_INT_FIELDS = {"chunk_overlap", "nougat_batchsize"}
+_RELATIVE_DIR_FIELDS = {"references_dir", "knowledge_library_dir", "tags_dir"}
+_INGESTERS = {"pymupdf4llm", "ocr", "nougat", "docling"}
 
 
 @dataclass
@@ -180,6 +195,33 @@ def _coerce(field_name: str, value):
     return value
 
 
+def _validate_config(cfg: Config) -> None:
+    """Reject values that would hang the pipeline or escape the vault layout."""
+    for field_name in _POSITIVE_INT_FIELDS:
+        value = getattr(cfg, field_name)
+        if value < 1:
+            raise ConfigError(f"{field_name} must be at least 1 (got {value}).")
+    for field_name in _NONNEGATIVE_INT_FIELDS:
+        value = getattr(cfg, field_name)
+        if value < 0:
+            raise ConfigError(f"{field_name} must not be negative (got {value}).")
+    if cfg.chunk_overlap >= cfg.chunk_size:
+        raise ConfigError(
+            "chunk_overlap must be smaller than chunk_size "
+            f"(got {cfg.chunk_overlap} >= {cfg.chunk_size})."
+        )
+    if cfg.ingester not in _INGESTERS:
+        choices = ", ".join(sorted(_INGESTERS))
+        raise ConfigError(f"Unknown ingester {cfg.ingester!r}. Choose one of: {choices}.")
+    for field_name in _RELATIVE_DIR_FIELDS:
+        value = str(getattr(cfg, field_name) or "").strip()
+        path = Path(value).expanduser()
+        if path.is_absolute() or path.drive or ".." in path.parts:
+            raise ConfigError(
+                f"{field_name} must be a relative path inside the vault (got {value!r})."
+            )
+
+
 def load_config(overrides: dict | None = None) -> Config:
     """Build a :class:`Config`, merging file / env / CLI overrides.
 
@@ -235,7 +277,7 @@ def load_config(overrides: dict | None = None) -> Config:
     if "vault_path" not in merged:
         raise ConfigError(
             "No vault path configured. Pass --vault, set KB_VAULT, or add "
-            "vault_path to kb.toml (see kb.example.toml)."
+            "vault_path to kb.toml (see kb/templates/kb.example.toml)."
         )
 
     coerced = {k: _coerce(k, v) for k, v in merged.items()}
@@ -243,6 +285,9 @@ def load_config(overrides: dict | None = None) -> Config:
 
     if not cfg.vault_path.exists():
         raise ConfigError(f"Vault path does not exist: {cfg.vault_path}")
+    if not cfg.vault_path.is_dir():
+        raise ConfigError(f"Vault path is not a directory: {cfg.vault_path}")
+    _validate_config(cfg)
     return cfg
 
 

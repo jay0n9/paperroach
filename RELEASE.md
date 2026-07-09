@@ -27,6 +27,7 @@ Run the same checks as CI:
 python -m unittest discover -s tests -v
 python -m compileall -q kb paperroach tests
 python -m pip wheel . --no-deps -w dist
+python scripts/smoke_wheel.py dist
 python -m paperroach --version
 ```
 

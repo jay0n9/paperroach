@@ -27,7 +27,7 @@ import re
 from pathlib import Path
 
 from kb.config import Config
-from kb.obsidian import _read_text_tolerant
+from kb.obsidian import _read_text_tolerant, write_text_atomic
 
 REGISTRY_START = "%% kb-tags-start %%"
 REGISTRY_END = "%% kb-tags-end %%"
@@ -128,7 +128,7 @@ def save_registry(config: Config, registry: dict[str, dict]) -> Path:
         new = existing.rstrip() + f"\n\n{managed}\n"
     else:
         new = body
-    path.write_text(new, encoding="utf-8")
+    write_text_atomic(path, new)
     return path
 
 

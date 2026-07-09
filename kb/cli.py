@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from importlib.resources import files
 from pathlib import Path
 
 from kb import __version__
@@ -23,6 +24,9 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--references-dir", dest="references_dir", help="Output subfolder")
     p.add_argument("--llm-model", dest="llm_model", help="Ollama LLM model tag")
     p.add_argument("--embed-model", dest="embed_model", help="Ollama embedding model")
+    p.add_argument(
+        "--embed-dim", dest="embed_dim", type=int, help="Embedding vector dimension"
+    )
     p.add_argument("--ollama-host", dest="ollama_host", help="Ollama base URL")
 
 
@@ -196,6 +200,7 @@ _OVERRIDE_KEYS = (
     "references_dir",
     "llm_model",
     "embed_model",
+    "embed_dim",
     "ollama_host",
     "rewrite_source_notes",
     "zotero_dir",
@@ -231,8 +236,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     if cfg_path.exists():
         print(f"kb.toml already exists at {cfg_path} (left unchanged).")
     else:
-        example = Path(__file__).resolve().parent.parent / "kb.example.toml"
-        template = example.read_text(encoding="utf-8") if example.exists() else ""
+        try:
+            template = files("kb").joinpath("templates", "kb.example.toml").read_text(
+                encoding="utf-8"
+            )
+        except FileNotFoundError:
+            template = ""
         vault_str = str(vault).replace("\\", "/")
         if template:
             import re

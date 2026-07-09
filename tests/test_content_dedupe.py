@@ -5,7 +5,7 @@ from io import StringIO
 from pathlib import Path
 
 from kb.models import content_hash_for, doc_id_for
-from kb.pipeline import _dedupe_by_content
+from kb.pipeline import _dedupe_by_content, _record_content_hash
 
 
 class ContentDedupeTests(unittest.TestCase):
@@ -72,6 +72,22 @@ class ContentDedupeTests(unittest.TestCase):
             self.assertEqual(kept, [path])
             self.assertEqual(hash_by_id, {doc_id: content_hash})
             self.assertEqual(skipped, [])
+
+    def test_record_content_hash_retires_previous_hash_for_same_document(self):
+        ledger = {
+            "oldhash": "aaaaaaaaaaaa",
+            "otherhash": "bbbbbbbbbbbb",
+        }
+
+        _record_content_hash(ledger, "newhash", "aaaaaaaaaaaa")
+
+        self.assertEqual(
+            ledger,
+            {
+                "newhash": "aaaaaaaaaaaa",
+                "otherhash": "bbbbbbbbbbbb",
+            },
+        )
 
 
 if __name__ == "__main__":

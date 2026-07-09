@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use PaperRoach in research, please cite this software."
+type: software
+title: PaperRoach
+version: 0.1.0
+authors:
+  - name: UJAM Studio
+license: MIT
+repository-code: "https://github.com/jay0n9/paperroach"
+abstract: "A local-first paper knowledge pipeline for Obsidian, Zotero, Ollama, and LanceDB."

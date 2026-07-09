@@ -17,7 +17,9 @@ import json
 import os
 import re
 import sys
+import threading
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 from kb import ingest as ingest_mod
@@ -76,38 +78,74 @@ class PipelineLock:
         config: Config,
         owner: str,
         stale_seconds: float = DEFAULT_PIPELINE_LOCK_STALE_SECONDS,
+        heartbeat_interval: float | None = None,
     ) -> None:
         self.path = config.kb_path / "pipeline.lock"
         self.owner = owner
         self.stale_seconds = stale_seconds
+        self.heartbeat_interval = (
+            heartbeat_interval
+            if heartbeat_interval is not None
+            else min(60.0, max(0.1, stale_seconds / 3.0))
+        )
         self.token = f"{os.getpid()}:{time.time():.6f}:{owner}"
         self._acquired = False
+        self._heartbeat_stop = threading.Event()
+        self._heartbeat_thread: threading.Thread | None = None
 
     def __enter__(self) -> "PipelineLock":
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._acquire()
         self._acquired = True
+        self._start_heartbeat()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         self.release()
 
     def heartbeat(self) -> None:
-        """Refresh the lock timestamp while long-running daemons are alive."""
+        """Refresh the lock mtime without exposing a partial JSON payload."""
         if not self._acquired or not self._owns_lock():
             return
-        self.path.write_text(self._payload(), encoding="utf-8")
+        try:
+            os.utime(self.path, None)
+        except OSError:
+            return
 
     def release(self) -> None:
         if not self._acquired:
             return
-        self._acquired = False
+        self._stop_heartbeat()
         if not self._owns_lock():
+            self._acquired = False
             return
+        self._acquired = False
         try:
             self.path.unlink()
         except OSError:
             pass
+
+    def _start_heartbeat(self) -> None:
+        if self.heartbeat_interval <= 0:
+            return
+        self._heartbeat_stop.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            name=f"paperroach-lock-{self.owner}",
+            daemon=True,
+        )
+        self._heartbeat_thread.start()
+
+    def _stop_heartbeat(self) -> None:
+        self._heartbeat_stop.set()
+        thread = self._heartbeat_thread
+        self._heartbeat_thread = None
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=1.0)
+
+    def _heartbeat_loop(self) -> None:
+        while not self._heartbeat_stop.wait(self.heartbeat_interval):
+            self.heartbeat()
 
     def _acquire(self) -> None:
         try:
@@ -274,6 +312,18 @@ def _save_hash_ledger(config: Config, ledger: dict[str, str]) -> None:
         except OSError:
             pass
         pass
+
+
+def _record_content_hash(ledger: dict[str, str], content_hash: str, doc_id: str) -> None:
+    """Record the current bytes for a document and retire its stale hashes.
+
+    A document id is path-based, so rebuilding a file after its contents change
+    must not leave the former bytes marked as already indexed elsewhere.
+    """
+    stale = [key for key, value in ledger.items() if value == doc_id and key != content_hash]
+    for key in stale:
+        del ledger[key]
+    ledger[content_hash] = doc_id
 
 
 # --------------------------------------------------------------------------- #
@@ -534,7 +584,7 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
             stored.append(doc)
             h = hash_by_id.get(doc.doc_id)
             if h:
-                ledger[h] = doc.doc_id
+                _record_content_hash(ledger, h, doc.doc_id)
             if doc.kind == "pdf":
                 try:
                     touched = knowledge.write_concept_notes(doc, config)
@@ -757,11 +807,16 @@ def refile_references(
                 domain_of[p.stem.lower()] = rel[0]
     candidates = sorted(set(domain_of.values()) | set(taxonomy.domain_names()))
 
-    store = KBStore(config)
-    path_to_id = {
-        (r.get("note_path") or ""): r["doc_id"]
-        for r in store.all_docs(columns=["doc_id", "note_path"])
-    }
+    # A dry-run is a pure filesystem plan. It must not create a vector store
+    # merely to collect note-path bookkeeping used only by --apply.
+    store: KBStore | None = None
+    path_to_id: dict[str, str] = {}
+    if apply:
+        store = KBStore(config)
+        path_to_id = {
+            (r.get("note_path") or ""): r["doc_id"]
+            for r in store.all_docs(columns=["doc_id", "note_path"])
+        }
 
     moves: list[tuple[Path, Path, str, str]] = []
     plan_rows: list[dict[str, str]] = []
@@ -814,7 +869,7 @@ def refile_references(
         _ensure_paper_classification_frontmatter(dest, subject, subdomain)
         moved += 1
         doc_id = path_to_id.get(old_str)
-        if doc_id:
+        if doc_id and store is not None:
             try:
                 store.update_note_path(doc_id, str(dest))
             except Exception as exc:
@@ -962,7 +1017,7 @@ def _write_refile_plan(
             )
             + " |"
         )
-    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    obsidian.write_text_atomic(path, "\n".join(lines).rstrip() + "\n")
     _log(f"Refile review plan written -> {path}")
     return path
 
@@ -1069,7 +1124,9 @@ def _ensure_paper_classification_frontmatter(
         changed = True
     if not changed:
         return False
-    note.write_text(f"---\n{obsidian._dump_yaml(fm).rstrip()}\n---\n{body}", encoding="utf-8")
+    obsidian.write_text_atomic(
+        note, f"---\n{obsidian._dump_yaml(fm).rstrip()}\n---\n{body}"
+    )
     return True
 
 
@@ -1323,15 +1380,68 @@ def retag_concepts(config: Config, apply: bool = False) -> dict:
     return {"updated": updated}
 
 
+def _generated_source_hash(row: dict) -> str | None:
+    """Return a duplicate-proof hash for a generated PDF note, if available."""
+    if row.get("kind") != "pdf":
+        return None
+    note_value = str(row.get("note_path") or "").strip()
+    if not note_value:
+        return None
+    note = Path(note_value)
+    if not note.exists() or not obsidian.is_generated_note(note):
+        return None
+    source = obsidian._read_frontmatter(note).get("kb-source")
+    if not isinstance(source, str) or not source.strip():
+        return None
+    return content_hash_for(Path(source).expanduser())
+
+
+def _duplicate_rows(docs: list[dict], orphan_ids: set[str]) -> tuple[list[dict], list[dict]]:
+    """Return confirmed duplicates plus possible title/year matches.
+
+    A matching title/year only identifies candidates. Automatic removal requires
+    generated PDF notes whose source files still have identical bytes.
+    """
+    by_title_year: dict[tuple[str, object], list[dict]] = {}
+    for row in docs:
+        if row["doc_id"] in orphan_ids:
+            continue
+        title = str(row.get("title") or "").strip().lower()
+        if title:
+            by_title_year.setdefault((title, row.get("year")), []).append(row)
+
+    confirmed: list[dict] = []
+    possible: list[dict] = []
+    for rows in by_title_year.values():
+        if len(rows) < 2:
+            continue
+        by_hash: dict[str, list[dict]] = {}
+        for row in rows:
+            source_hash = _generated_source_hash(row)
+            if source_hash:
+                by_hash.setdefault(source_hash, []).append(row)
+
+        proven_ids: set[str] = set()
+        for same_content in by_hash.values():
+            if len(same_content) < 2:
+                continue
+            ordered = sorted(
+                same_content,
+                key=lambda row: (len(str(row.get("note_path") or "")), row["doc_id"]),
+            )
+            proven_ids.update(row["doc_id"] for row in ordered)
+            confirmed.extend(ordered[1:])
+        possible.extend(row for row in rows if row["doc_id"] not in proven_ids)
+    return confirmed, possible
+
+
 def gc(config: Config, apply: bool = False) -> dict:
-    """Report (and with ``apply`` remove) stale store rows and duplicate docs.
+    """Report (and with ``apply`` remove) stale rows and proven duplicates.
 
     * doc/concept rows whose note file no longer exists (deleted or renamed
       outside the pipeline) — these otherwise haunt related-links forever.
-    * documents whose (title, year) duplicate another's (e.g. the same PDF
-      ingested from two Zotero storage folders before content dedup existed);
-      the copy with the extra " (2)"-style filename is dropped, including its
-      generated note.
+    * generated PDF notes whose source bytes match exactly. Title/year matches
+      without that proof remain visible for manual review and are never deleted.
     """
     if not table_names(config):
         _log("Store is not initialized -- nothing to clean.")
@@ -1348,19 +1458,7 @@ def gc(config: Config, apply: bool = False) -> dict:
     ]
     orphan_ids = {r["doc_id"] for r in orphans}
 
-    by_key: dict[tuple, list[dict]] = {}
-    for r in docs:
-        if r["doc_id"] in orphan_ids:
-            continue
-        title = (r.get("title") or "").strip().lower()
-        if title:
-            by_key.setdefault((title, r.get("year")), []).append(r)
-    dups: list[dict] = []
-    for rows in by_key.values():
-        if len(rows) > 1:
-            # Keep the shortest note path — "X (2025).md" over "X (2025) (2).md".
-            rows = sorted(rows, key=lambda r: (len(r.get("note_path") or ""), r["doc_id"]))
-            dups.extend(rows[1:])
+    dups, possible_dups = _duplicate_rows(docs, orphan_ids)
 
     concept_orphans = [
         r for r in store.all_concepts()
@@ -1370,19 +1468,26 @@ def gc(config: Config, apply: bool = False) -> dict:
     _log(f"Orphaned document rows : {len(orphans)}")
     for r in orphans:
         _log(f"  - {r.get('title') or r['doc_id']}  (note missing: {r.get('note_path')})")
-    _log(f"Duplicate documents    : {len(dups)}")
+    _log(f"Confirmed duplicates  : {len(dups)}")
     for r in dups:
+        _log(f"  - {r.get('title')}  ({r.get('note_path')})")
+    _log(f"Possible title matches: {len(possible_dups)}")
+    for r in possible_dups:
         _log(f"  - {r.get('title')}  ({r.get('note_path')})")
     _log(f"Orphaned concept rows  : {len(concept_orphans)}")
     for r in concept_orphans:
         _log(f"  - {r.get('name')}  (note missing: {r.get('note_path')})")
 
-    if not (orphans or dups or concept_orphans):
-        _log("Store is clean.")
-        return {"removed": 0}
+    cleanup_candidates = orphans or dups or concept_orphans
+    if not cleanup_candidates:
+        if possible_dups:
+            _log("No confirmed cleanup candidates. Review possible title matches manually.")
+        else:
+            _log("Store is clean.")
+        return {"removed": 0, "possible_duplicates": len(possible_dups)}
     if not apply:
         _log("\nDry run — nothing deleted. Re-run `paperroach gc --apply` to clean up.")
-        return {"removed": 0}
+        return {"removed": 0, "possible_duplicates": len(possible_dups)}
 
     removed = 0
     for r in orphans:
@@ -1395,7 +1500,8 @@ def gc(config: Config, apply: bool = False) -> dict:
                 note_path.unlink()
                 _log(f"  · removed duplicate note: {note_path.name}")
             except OSError:
-                pass
+                _log(f"  ! could not remove duplicate note: {note_path}")
+                continue
         store.delete_doc(r["doc_id"])
         removed += 1
     for r in concept_orphans:
@@ -1403,7 +1509,7 @@ def gc(config: Config, apply: bool = False) -> dict:
         removed += 1
     store.optimize()
     _log(f"Removed {removed} stale/duplicate entr(ies).")
-    return {"removed": removed}
+    return {"removed": removed, "possible_duplicates": len(possible_dups)}
 
 
 def watch(config: Config, scan_only: bool = False) -> dict:
@@ -1426,9 +1532,13 @@ def watch(config: Config, scan_only: bool = False) -> dict:
     # the same notes/store, so they coordinate through one lock file.
     fresh_window = max(60.0, config.watch_interval * 5.0)
     try:
-        with PipelineLock(config, "watch", stale_seconds=fresh_window) as lock:
+        # The watcher only holds the writer lock while it initializes or builds.
+        # Keeping it for the full daemon lifetime blocks unrelated manual work.
+        with nullcontext():
             _MAX_ATTEMPTS = 3
-            seen = {r["doc_id"] for r in KBStore(config).all_docs(columns=["doc_id"])}
+            # Refresh stored ids only after acquiring the short-lived build lock.
+            # This lets a long-running watcher coexist with manual writers.
+            seen: set[str] = set()
             attempts: dict[str, int] = {}  # doc_id -> failed build attempts
             storage = data_dir / "storage"
             _log(f"Zotero data dir : {data_dir}")
@@ -1452,8 +1562,22 @@ def watch(config: Config, scan_only: bool = False) -> dict:
                     _log(f"\nDetected {len(new)} new PDF(s) in Zotero:")
                     for p in new:
                         _log(f"  + {p.name}")
+                    locked = False
                     try:
-                        result = build(new, config)
+                        with PipelineLock(
+                            config, "watch-build", stale_seconds=fresh_window
+                        ):
+                            current_seen = {
+                                row["doc_id"]
+                                for row in KBStore(config).all_docs(columns=["doc_id"])
+                            }
+                            seen |= current_seen
+                            batch = [p for p in new if doc_id_for(p) not in seen]
+                            result = build(batch, config) if batch else {"succeeded": []}
+                    except PipelineLockError as exc:
+                        _log(f"  ! writer is busy ({exc}); will retry")
+                        result = {"succeeded": []}
+                        locked = True
                     except Exception as exc:
                         # The watcher daemon must survive anything a build throws.
                         _log(f"  ! build failed: {exc}")
@@ -1463,20 +1587,22 @@ def watch(config: Config, scan_only: bool = False) -> dict:
                     # Content-duplicates count as done too.
                     succeeded = set(result.get("succeeded") or [])
                     seen |= succeeded | set(result.get("skipped_duplicates") or [])
-                    for p in new:
-                        did = doc_id_for(p)
-                        if did not in seen:
-                            attempts[did] = attempts.get(did, 0) + 1
-                            if attempts[did] == _MAX_ATTEMPTS:
-                                _log(
-                                    f"  ! giving up on {p.name} after "
-                                    f"{_MAX_ATTEMPTS} attempts"
-                                )
+                    if not locked:
+                        for p in new:
+                            did = doc_id_for(p)
+                            if did not in seen:
+                                attempts[did] = attempts.get(did, 0) + 1
+                                if attempts[did] == _MAX_ATTEMPTS:
+                                    _log(
+                                        f"  ! giving up on {p.name} after "
+                                        f"{_MAX_ATTEMPTS} attempts"
+                                    )
                     total += len(succeeded)
+                    if locked and scan_only:
+                        return {"processed": total, "locked": True}
                 if scan_only:
                     _log(f"Scan complete. {total} new document(s) processed.")
                     return {"processed": total}
-                lock.heartbeat()
                 time.sleep(config.watch_interval)
     except PipelineLockError as exc:
         _log(str(exc))
@@ -1516,7 +1642,7 @@ def integrate_note_equations(path: Path, client: OllamaClient, config: Config) -
     # remove the now-redundant Key Equations section (also when it is the
     # last section of the note — hence the \Z alternative)
     text = re.sub(r"(?ms)\n## Key Equations\b.*?(?=\n## |\Z)", "\n", text, count=1)
-    path.write_text(obsidian.fix_inline_math(text), encoding="utf-8")
+    obsidian.write_text_atomic(path, obsidian.fix_inline_math(text))
     return True
 
 
@@ -1535,7 +1661,7 @@ def fix_math_in_all_notes(config: Config) -> int:
             original = obsidian._read_text_tolerant(p)
             new = obsidian.fix_inline_math(original)
             if new != original:
-                p.write_text(new, encoding="utf-8")
+                obsidian.write_text_atomic(p, new)
                 fixed += 1
     return fixed
 

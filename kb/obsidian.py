@@ -8,7 +8,10 @@ block is inserted / refreshed inside them.
 from __future__ import annotations
 
 import datetime as _dt
+import os
 import re
+import stat
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -35,6 +38,41 @@ _RESERVED_NAMES = {
 _INLINE_MATH = re.compile(r"(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)")
 
 _MATH_CHARS = set("\\^_={}")
+
+
+def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Replace a text file without exposing a partially-written version.
+
+    Generated notes carry user-authored sections, and source notes may be
+    updated in place. Writing a sibling temporary file before ``os.replace``
+    keeps the previous version intact if a write or process fails midway.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        previous_mode = stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        previous_mode = None
+
+    tmp_path: Path | None = None
+    try:
+        fd, raw_tmp = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+        )
+        tmp_path = Path(raw_tmp)
+        with os.fdopen(fd, "w", encoding=encoding, newline="") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if previous_mode is not None:
+            os.chmod(tmp_path, previous_mode)
+        os.replace(tmp_path, path)
+    except Exception:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def fix_inline_math(text: str) -> str:
@@ -105,7 +143,7 @@ def assign_note_location(doc: Document, config: Config) -> None:
         doc.link_target = doc.source_path.stem
         return
     name = sanitize_filename(doc.metadata.title, doc.metadata.year)
-    name = _dedupe_against(name, config.references_path, doc.source_path)
+    name = _dedupe_against(name, config.vault_path, doc.source_path)
     doc.link_target = name
     subject = ""
     subdomain = ""
@@ -153,7 +191,7 @@ def reference_subject_folder(config: Config, subject: str) -> Path:
     return config.references_path / safe
 
 
-def _dedupe_against(name: str, refs_root: Path, source_path: Path) -> str:
+def _dedupe_against(name: str, vault_root: Path, source_path: Path) -> str:
     """Avoid colliding with an *unrelated* existing note of the same title.
 
     The scan is recursive: wikilinks resolve by basename across the whole
@@ -161,9 +199,9 @@ def _dedupe_against(name: str, refs_root: Path, source_path: Path) -> str:
     """
 
     def taken(candidate: str) -> bool:
-        if not refs_root.exists():
+        if not vault_root.exists():
             return False
-        for existing in refs_root.rglob(f"{candidate}.md"):
+        for existing in vault_root.rglob(f"{candidate}.md"):
             if not _is_our_note_for(existing, source_path):
                 return True
         return False
@@ -414,7 +452,7 @@ def inject_my_notes(path: Path, content: str) -> bool:
     if not m or m.group(1).strip():
         return False
     updated = text[: m.start(1)] + content.rstrip() + "\n\n" + text[m.end(1):]
-    path.write_text(updated, encoding="utf-8")
+    write_text_atomic(path, updated)
     return True
 
 
@@ -429,8 +467,7 @@ def _related_block(related_links: list[str]) -> str:
 def write_generated_note(doc: Document, related_links: list[str], config: Config) -> Path:
     assert doc.note_path is not None
     content = render_note(doc, related_links, config)
-    doc.note_path.parent.mkdir(parents=True, exist_ok=True)
-    doc.note_path.write_text(content, encoding="utf-8")
+    write_text_atomic(doc.note_path, content)
     return doc.note_path
 
 
@@ -476,7 +513,7 @@ def update_related_in_file(path: Path, related_links: list[str]) -> bool:
         updated = f"{original}{sep}\n{RELATED_HEADING}\n\n{block}\n"
 
     if updated != original:
-        path.write_text(updated, encoding="utf-8")
+        write_text_atomic(path, updated)
         return True
     return False
 

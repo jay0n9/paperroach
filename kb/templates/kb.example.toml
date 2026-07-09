@@ -1,5 +1,5 @@
 # ────────────────────────────────────────────────────────────────────
-#  PaperRoach pipeline configuration
+# PaperRoach pipeline configuration
 #  Copy to "kb.toml" (next to where you run `paperroach`) or pass --vault on CLI.
 #  CLI flags > environment variables (KB_*) > this file > built-in defaults.
 # ────────────────────────────────────────────────────────────────────

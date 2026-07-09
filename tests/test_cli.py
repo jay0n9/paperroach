@@ -29,6 +29,23 @@ class CLITests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 0)
         self.assertEqual(stdout.getvalue().strip(), f"paperroach {__version__}")
 
+    def test_embed_dim_cli_override(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = Path.cwd()
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            try:
+                os.chdir(root)
+                args = build_parser().parse_args(
+                    ["stats", "--vault", str(vault), "--embed-dim", "3"]
+                )
+                config = cli._config_from_args(args)
+            finally:
+                os.chdir(cwd)
+
+            self.assertEqual(config.embed_dim, 3)
+
     def test_pyproject_version_matches_runtime_version(self):
         pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
         data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
@@ -49,7 +66,11 @@ class CLITests(unittest.TestCase):
                 os.chdir(cwd)
 
             self.assertEqual(code, 0)
-            self.assertTrue((root / "kb.toml").exists())
+            config_path = root / "kb.toml"
+            self.assertTrue(config_path.exists())
+            config_data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(config_data["embed_dim"], 1024)
+            self.assertEqual(config_data["ingester"], "pymupdf4llm")
             self.assertTrue((vault / "References").exists())
             self.assertIn("Wrote", stdout.getvalue())
 
