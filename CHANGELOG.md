@@ -22,6 +22,8 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 - Read-only commands now avoid initializing `.kb` on fresh vaults when the
   store does not exist yet.
+- `paperroach stats` now validates existing store metadata compatibility
+  without creating or rewriting store files.
 
 ### Migration Notes
 

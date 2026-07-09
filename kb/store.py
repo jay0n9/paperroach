@@ -104,6 +104,34 @@ def _save_store_meta(config: Config) -> None:
     os.replace(tmp, path)
 
 
+def validate_store_meta(config: Config) -> None:
+    """Validate existing store metadata without creating or rewriting it."""
+    meta = _load_store_meta(config)
+    if not meta:
+        return
+    schema_version = meta.get("schema_version")
+    if schema_version != STORE_SCHEMA_VERSION:
+        raise RuntimeError(
+            f"Store metadata schema_version is {schema_version!r}, but "
+            f"PaperRoach expects {STORE_SCHEMA_VERSION}. Rebuild or migrate "
+            f"the store at {config.kb_path}."
+        )
+    stored_dim = meta.get("embed_dim")
+    if stored_dim is not None and stored_dim != config.embed_dim:
+        raise RuntimeError(
+            f"Store metadata records embed_dim={stored_dim}, but config uses "
+            f"embed_dim={config.embed_dim}. Restore the previous embed "
+            f"settings or rebuild {config.kb_path}."
+        )
+    stored_model = str(meta.get("embed_model") or "")
+    if stored_model and stored_model != config.embed_model:
+        raise RuntimeError(
+            f"Store metadata records embed_model={stored_model!r}, but config "
+            f"uses {config.embed_model!r}. Restore the previous embed "
+            f"model or rebuild {config.kb_path}."
+        )
+
+
 def table_names(config: Config) -> set[str]:
     """Existing LanceDB tables without creating the PaperRoach schema."""
     if not config.kb_path.exists():
@@ -114,6 +142,7 @@ def table_names(config: Config) -> set[str]:
 
 def row_counts(config: Config) -> tuple[int, int]:
     """Read existing doc/chunk counts without creating missing tables."""
+    validate_store_meta(config)
     names = table_names(config)
     if not names:
         return 0, 0
@@ -137,30 +166,7 @@ class KBStore:
         self._save_store_meta()
 
     def _check_store_meta(self) -> None:
-        meta = _load_store_meta(self.config)
-        if not meta:
-            return
-        schema_version = meta.get("schema_version")
-        if schema_version != STORE_SCHEMA_VERSION:
-            raise RuntimeError(
-                f"Store metadata schema_version is {schema_version!r}, but "
-                f"PaperRoach expects {STORE_SCHEMA_VERSION}. Rebuild or migrate "
-                f"the store at {self.config.kb_path}."
-            )
-        stored_dim = meta.get("embed_dim")
-        if stored_dim is not None and stored_dim != self.config.embed_dim:
-            raise RuntimeError(
-                f"Store metadata records embed_dim={stored_dim}, but config uses "
-                f"embed_dim={self.config.embed_dim}. Restore the previous embed "
-                f"settings or rebuild {self.config.kb_path}."
-            )
-        stored_model = str(meta.get("embed_model") or "")
-        if stored_model and stored_model != self.config.embed_model:
-            raise RuntimeError(
-                f"Store metadata records embed_model={stored_model!r}, but config "
-                f"uses {self.config.embed_model!r}. Restore the previous embed "
-                f"model or rebuild {self.config.kb_path}."
-            )
+        validate_store_meta(self.config)
 
     def _save_store_meta(self) -> None:
         _save_store_meta(self.config)

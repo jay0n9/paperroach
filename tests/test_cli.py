@@ -164,6 +164,32 @@ class CLITests(unittest.TestCase):
             self.assertIn("Chunks      : 0", output)
             self.assertFalse(config.kb_path.exists())
 
+    def test_stats_fails_on_store_embedding_model_mismatch(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            first = Config(
+                vault_path=vault,
+                kb_dir=".kb",
+                embed_model="first",
+                embed_dim=3,
+            )
+            KBStore(first)
+            changed = Config(
+                vault_path=vault,
+                kb_dir=".kb",
+                embed_model="second",
+                embed_dim=3,
+            )
+            stderr = StringIO()
+            with patch.object(cli, "_config_from_args", return_value=changed):
+                with redirect_stderr(stderr):
+                    code = main(["stats"])
+
+            self.assertEqual(code, 1)
+            self.assertIn("embed_model='first'", stderr.getvalue())
+
     def test_gc_apply_does_not_initialize_empty_store(self):
         with tempfile.TemporaryDirectory() as td:
             config = self._temp_config(Path(td))
