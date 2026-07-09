@@ -574,7 +574,8 @@ Managed blocks use markers so user content can survive refreshes:
 | MOC contents | `%% kb-moc-start %%` / `%% kb-moc-end %%` |
 | Tag registry table | `%% kb-tags-start %%` / `%% kb-tags-end %%` |
 
-If a marker pair is missing, duplicated, or out of order, the updater skips the
+If a managed block has no markers yet, the updater appends a fresh block where
+safe. If markers are partial, duplicated, or out of order, the updater skips the
 file rather than partially refreshing a broken managed block.
 
 ## 11. Operational Notes

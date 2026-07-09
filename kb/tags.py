@@ -48,9 +48,11 @@ def load_registry(config: Config) -> dict[str, dict]:
     if not path.exists():
         return {}
     text = _read_text_tolerant(path)
+    if text.count(REGISTRY_START) != 1 or text.count(REGISTRY_END) != 1:
+        return {}
     start = text.find(REGISTRY_START)
     end = text.find(REGISTRY_END)
-    if start == -1 or end == -1 or end <= start:
+    if end <= start:
         return {}
     registry: dict[str, dict] = {}
     for line in text[start:end].splitlines():
@@ -94,16 +96,36 @@ def save_registry(config: Config, registry: dict[str, dict]) -> Path:
         "canonical tag on the left.\n\n"
         f"{REGISTRY_START}\n{table}\n{REGISTRY_END}\n"
     )
+    managed = f"{REGISTRY_START}\n{table}\n{REGISTRY_END}"
     existing = _read_text_tolerant(path) if path.exists() else ""
-    if REGISTRY_START in existing and REGISTRY_END in existing:
+    start_count = existing.count(REGISTRY_START)
+    end_count = existing.count(REGISTRY_END)
+    if start_count == 1 and end_count == 1:
         # Preserve any prose the user added around the managed table.
-        new = re.sub(
-            re.escape(REGISTRY_START) + r".*?" + re.escape(REGISTRY_END),
-            lambda _m: f"{REGISTRY_START}\n{table}\n{REGISTRY_END}",
+        pattern = re.escape(REGISTRY_START) + r".*?" + re.escape(REGISTRY_END)
+        new, replacements = re.subn(
+            pattern,
+            lambda _m: managed,
             existing,
             count=1,
             flags=re.DOTALL,
         )
+        if replacements != 1:
+            print(
+                f"  ! Tag Registry block in '{path.name}' has markers out of "
+                "order; skipping update.",
+                flush=True,
+            )
+            return path
+    elif start_count or end_count:
+        print(
+            f"  ! Tag Registry block in '{path.name}' has {start_count} start "
+            f"marker(s) and {end_count} end marker(s); skipping update.",
+            flush=True,
+        )
+        return path
+    elif existing:
+        new = existing.rstrip() + f"\n\n{managed}\n"
     else:
         new = body
     path.write_text(new, encoding="utf-8")
