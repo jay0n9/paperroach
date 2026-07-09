@@ -247,8 +247,10 @@ def cmd_build(args: argparse.Namespace) -> int:
 
     config = _config_from_args(args)
     paths = [Path(p) for p in args.inputs]
-    pipeline.build(paths, config, recursive=args.recursive)
-    return 0
+    result = pipeline.build(paths, config, recursive=args.recursive)
+    if result.get("succeeded") or result.get("skipped_duplicates"):
+        return 0
+    return 1
 
 
 def cmd_search(args: argparse.Namespace) -> int:

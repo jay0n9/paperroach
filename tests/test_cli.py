@@ -5,8 +5,10 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from kb import __version__
+from kb import cli
 from kb.cli import build_parser, main
 from kb.config import load_config
 
@@ -78,6 +80,27 @@ class CLITests(unittest.TestCase):
             warning = stderr.getvalue()
             self.assertIn("paperroach: warning", warning)
             self.assertNotIn("kb: warning", warning)
+
+    def test_build_command_returns_nonzero_when_nothing_succeeds(self):
+        with patch.object(cli, "_config_from_args", return_value=object()):
+            with patch("kb.pipeline.build", return_value={"processed": 0, "succeeded": []}):
+                code = main(["build", "missing.pdf"])
+
+        self.assertEqual(code, 1)
+
+    def test_build_command_returns_zero_for_success_or_known_duplicates(self):
+        cases = [
+            {"processed": 1, "succeeded": ["doc123"]},
+            {"processed": 0, "succeeded": [], "skipped_duplicates": ["doc456"]},
+        ]
+
+        for result in cases:
+            with self.subTest(result=result):
+                with patch.object(cli, "_config_from_args", return_value=object()):
+                    with patch("kb.pipeline.build", return_value=result):
+                        code = main(["build", "paper.pdf"])
+
+                self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":

@@ -121,6 +121,10 @@ PDFs become generated paper notes under:
 Markdown notes are indexed for search and related-linking. Existing user notes
 are not overwritten; PaperRoach only manages marker-delimited blocks.
 
+`paperroach build` exits with code 0 only when at least one document is
+successfully indexed or every remaining input is a known duplicate. If nothing
+is processed, automation receives a non-zero exit code.
+
 ## Generated Notes
 
 Generated paper notes use YAML frontmatter and a study-note body:

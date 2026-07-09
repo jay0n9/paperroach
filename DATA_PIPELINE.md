@@ -654,16 +654,15 @@ batch. Important boundaries:
 
 ## 14. Recommended Next Improvements
 
-1. Move build success commit after note writing succeeds, or add rollback.
-2. Add a global pipeline lock for manual build/maintenance commands, not only
+1. Add a global pipeline lock for manual build/maintenance commands, not only
    `paperroach watch`.
-3. Add tests for pure functions:
+2. Add tests for pure functions:
    - filename sanitization
    - frontmatter splitting
    - chunking
    - content dedupe
    - managed block replacement
-4. Align `.gitignore` with actual generated artifacts:
+3. Align `.gitignore` with actual generated artifacts:
    - `.kbstore/`
    - `kb-watch.log*`
    - `kb_backups/`
