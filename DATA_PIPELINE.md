@@ -168,6 +168,8 @@ Steps:
    - venue
    - venue type
    - DOI
+   - explicit primary domain, if present in metadata/frontmatter
+   - explicit subdomain, if present in metadata/frontmatter
    - tags
 
 2. Enrich from Zotero if possible:
@@ -200,10 +202,10 @@ Steps:
    it uses AI-assisted environment generation. A core rendering or geometry
    paper can be filed under `Computer Science / Computer Graphics`.
 
-   Subdomain priority is metadata-first: explicit frontmatter and Zotero
-   `Extra` hints are used first, then metadata hints such as tags, venue,
-   DOI/source URL, and title, and only then compact body sections such as
-   TL;DR, Approach, and Concepts.
+   Subdomain priority is metadata-first: explicit frontmatter, metadata
+   extraction fields, and Zotero `Extra` hints are used first, then metadata
+   hints such as tags, venue, DOI/source URL, and title, and only then compact
+   body sections such as TL;DR, Approach, and Concepts.
 
 5. Distill concept details:
    - explanation

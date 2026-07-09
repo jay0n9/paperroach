@@ -14,6 +14,8 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Changed
 
+- Metadata extraction now preserves explicit `Domain` and `Subdomain` fields
+  before classifier or body-text fallback cues are considered.
 - Documented vector store compatibility and future migration expectations.
 
 ### Fixed

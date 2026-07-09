@@ -1,11 +1,68 @@
 import unittest
+from pathlib import Path
 
 from kb import llm
 from kb.models import PaperAnalysis, PaperMetadata
 from kb.pipeline import _fallback_paper_classification
 
 
+class PromptCaptureClient:
+    def __init__(self, obj):
+        self.obj = obj
+        self.system = ""
+        self.user = ""
+
+    def generate_json(self, system, user):
+        self.system = system
+        self.user = user
+        return self.obj
+
+
 class LLMClassificationTests(unittest.TestCase):
+    def test_metadata_extraction_preserves_explicit_domain_fields(self):
+        metadata = llm._coerce(
+            {
+                "title": "Frontmatter Paper",
+                "primary_domain": "HCI",
+                "subdomain": "Health & Wellbeing",
+                "tags": ["paper"],
+            },
+            "# Frontmatter Paper",
+            Path("paper.md"),
+        )
+
+        self.assertEqual(metadata.primary_domain, "HCI")
+        self.assertEqual(metadata.subdomain, "Health & Wellbeing")
+
+    def test_classification_prompt_includes_explicit_metadata_domain_fields(self):
+        client = PromptCaptureClient(
+            {"primary_domain": "Generative AI", "subdomain": "3D Generation"}
+        )
+        metadata = PaperMetadata(
+            title="Explicit Metadata",
+            primary_domain="HCI",
+            subdomain="Health & Wellbeing",
+        )
+
+        cls = llm.classify_paper(
+            client,
+            "The body mentions mesh diffusion and benchmark results.",
+            metadata,
+            PaperAnalysis(),
+            config=type("ConfigStub", (), {"analysis_input_chars": 10000})(),
+            candidate_domains=[
+                "Computer Science",
+                "Generative AI",
+                "HCI",
+                "Statistics",
+            ],
+        )
+
+        self.assertIn("Explicit metadata domain: HCI", client.user)
+        self.assertIn("Explicit metadata subdomain: Health & Wellbeing", client.user)
+        self.assertEqual(cls.primary_domain, "HCI")
+        self.assertEqual(cls.subdomain, "Health & Wellbeing")
+
     def test_explicit_metadata_subdomain_beats_model_and_metadata_cues(self):
         metadata = PaperMetadata(
             title="A Mixed Metadata Paper",

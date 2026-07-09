@@ -30,10 +30,14 @@ _SYSTEM = (
     '  "venue"             : string, journal/conference/proceedings/book title if visible\n'
     '  "venue_type"        : string, e.g. journal, conference, proceedings, book\n'
     '  "doi"               : string DOI if visible\n'
+    '  "primary_domain"    : string, only if explicitly visible in metadata/frontmatter\n'
+    '  "subdomain"         : string, only if explicitly visible in metadata/frontmatter\n'
     '  "tags"              : array of 3-8 short lowercase topic tags '
     "(english keywords, no '#', no spaces — use hyphens)\n"
     "If a field is unknown, use an empty string/array or null. Do not invent "
-    "authors or years that are not present in the text."
+    "authors or years that are not present in the text. Do not infer "
+    "primary_domain or subdomain from the paper body; copy them only when they "
+    "are explicitly present in metadata or frontmatter."
 )
 
 _HEADER_RE = re.compile(r"^(#{1,6})\s+(.*\S)\s*$")
@@ -175,6 +179,12 @@ def _coerce(obj: dict, markdown: str, source_path: Path) -> PaperMetadata:
         venue=str(obj.get("venue") or "").strip(),
         venue_type=str(obj.get("venue_type") or "").strip(),
         doi=str(obj.get("doi") or "").strip(),
+        primary_domain=str(
+            obj.get("primary_domain") or obj.get("domain") or ""
+        ).strip(),
+        subdomain=str(
+            obj.get("subdomain") or obj.get("primary_subdomain") or ""
+        ).strip(),
     )
 
 
@@ -309,6 +319,10 @@ def classify_paper(
         f"Title: {metadata.title}",
         f"Existing tags: {', '.join(metadata.tags) if metadata.tags else '(none)'}",
     ]
+    if metadata.primary_domain:
+        parts.append(f"Explicit metadata domain: {metadata.primary_domain}")
+    if metadata.subdomain:
+        parts.append(f"Explicit metadata subdomain: {metadata.subdomain}")
     if metadata.summary:
         parts.append(f"Metadata summary: {metadata.summary}")
     if metadata.methods:
