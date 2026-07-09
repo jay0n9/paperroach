@@ -27,6 +27,9 @@ _SYSTEM = (
     '  "summary"           : string, 3-6 sentences, in English\n'
     '  "key_contributions" : array of 3-6 short strings, in English\n'
     '  "methods"           : string describing methodology, in English\n'
+    '  "venue"             : string, journal/conference/proceedings/book title if visible\n'
+    '  "venue_type"        : string, e.g. journal, conference, proceedings, book\n'
+    '  "doi"               : string DOI if visible\n'
     '  "tags"              : array of 3-8 short lowercase topic tags '
     "(english keywords, no '#', no spaces — use hyphens)\n"
     "If a field is unknown, use an empty string/array or null. Do not invent "
@@ -169,6 +172,9 @@ def _coerce(obj: dict, markdown: str, source_path: Path) -> PaperMetadata:
         key_contributions=_as_str_list(obj.get("key_contributions")),
         methods=str(obj.get("methods") or "").strip(),
         tags=tags,
+        venue=str(obj.get("venue") or "").strip(),
+        venue_type=str(obj.get("venue_type") or "").strip(),
+        doi=str(obj.get("doi") or "").strip(),
     )
 
 
@@ -255,6 +261,7 @@ _CLASSIFY_SYSTEM = (
     "human-facing system that is designed or evaluated with users, classify it "
     "as HCI, not Generative AI.\n\n"
     "Taxonomy:\n{taxonomy}\n\n"
+    "Subdomain taxonomy:\n{subdomains}\n\n"
     "Few-shot examples:\n"
     "- Title: ASafePlace: User-Led Personalization of VR Relaxation via an Art "
     "Therapy Activity\n"
@@ -262,14 +269,17 @@ _CLASSIFY_SYSTEM = (
     "study, relaxation/anxiety measures, qualitative feedback, AI-assisted "
     "environment creation\n"
     "  Correct primary_domain: HCI\n"
+    "  Correct subdomain: VR/AR Interaction\n"
     "  Secondary: Virtual Reality, Mental Health, Generative AI\n"
     "  Reason: AI is an enabling component; the contribution is a "
     "human-centered interactive system and user evaluation.\n"
     "- Title: Native Mesh Generation with Diffusion\n"
     "  Cues: diffusion model, mesh generation, generative modeling benchmark\n"
     "  Correct primary_domain: Generative AI\n"
+    "  Correct subdomain: 3D Generation\n"
     "  Reason: the model/generation method is the main contribution.\n\n"
     'Return ONLY JSON: {"primary_domain": "<one domain>", '
+    '"subdomain": "<one subdomain under primary_domain, or empty string>", '
     '"secondary_domains": ["<domain or topic>", ...], '
     '"contribution_type": "<short phrase>", '
     '"methods": ["<method/evaluation cue>", ...], '
@@ -290,6 +300,8 @@ def classify_paper(
     candidates = sorted(set(taxonomy.domain_names()) | set(candidate_domains or []))
     system = _CLASSIFY_SYSTEM.replace(
         "{taxonomy}", taxonomy.prompt_block(candidate_domains)
+    ).replace(
+        "{subdomains}", taxonomy.subdomain_prompt_block()
     )
     head = _head(markdown, min(config.analysis_input_chars, 10000))
     outline = _outline(markdown)
@@ -301,6 +313,10 @@ def classify_paper(
         parts.append(f"Metadata summary: {metadata.summary}")
     if metadata.methods:
         parts.append(f"Metadata methods: {metadata.methods}")
+    if metadata.venue:
+        parts.append(f"Venue: {metadata.venue}")
+    if metadata.venue_type:
+        parts.append(f"Venue type: {metadata.venue_type}")
     if analysis.tl_dr:
         parts.append(f"TL;DR: {analysis.tl_dr}")
     if analysis.problem_motivation:
@@ -337,6 +353,11 @@ def _coerce_classification(
     )
     if not primary:
         primary = taxonomy.classify_text_heuristic(fallback_text, candidates)
+    subdomain = taxonomy.normalize_subdomain(
+        _s(obj.get("subdomain") or obj.get("primary_subdomain")), primary
+    )
+    if not subdomain and primary:
+        subdomain = taxonomy.classify_subdomain_heuristic(fallback_text, primary)
 
     secondary: list[str] = []
     for item in _as_str_list(obj.get("secondary_domains") or obj.get("secondary")):
@@ -356,6 +377,7 @@ def _coerce_classification(
 
     return PaperClassification(
         primary_domain=primary,
+        subdomain=subdomain,
         secondary_domains=secondary,
         contribution_type=_s(obj.get("contribution_type")),
         methods=_as_str_list(obj.get("methods"))[:8],

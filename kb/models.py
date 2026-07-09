@@ -18,6 +18,13 @@ class PaperMetadata:
     methods: str = ""
     tags: list[str] = field(default_factory=list)
     source_url: str = ""  # e.g. Zotero's URL field; falls back to file path
+    venue: str = ""       # journal, conference, proceedings, book, etc.
+    venue_type: str = ""  # e.g. journalArticle, conferencePaper
+    doi: str = ""
+    volume: str = ""
+    issue: str = ""
+    pages: str = ""
+    publisher: str = ""
 
 
 @dataclass
@@ -42,6 +49,7 @@ class PaperClassification:
     """Primary paper domain used for filing the paper note."""
 
     primary_domain: str = ""
+    subdomain: str = ""
     secondary_domains: list[str] = field(default_factory=list)
     contribution_type: str = ""
     methods: list[str] = field(default_factory=list)

@@ -241,10 +241,29 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                         ),
                         known_subjects,
                     )
-                    classification = PaperClassification(primary_domain=fallback)
+                    subdomain = taxonomy.classify_subdomain_heuristic(
+                        "\n".join(
+                            [
+                                metadata.title,
+                                " ".join(metadata.tags),
+                                metadata.summary,
+                                metadata.methods,
+                                analysis.tl_dr,
+                                analysis.problem_motivation,
+                                analysis.approach,
+                                analysis.key_results,
+                            ]
+                        ),
+                        fallback,
+                    )
+                    classification = PaperClassification(
+                        primary_domain=fallback, subdomain=subdomain
+                    )
                     _log(f"      · domain classification failed ({exc}); fallback={fallback or 'none'}")
                 if classification.primary_domain:
                     _log(f"      · primary domain: {classification.primary_domain}")
+                if classification.subdomain:
+                    _log(f"      · subdomain: {classification.subdomain}")
             if config.create_concept_notes and analysis.concepts:
                 _log("      · distilling concept notes …")
                 try:
@@ -502,7 +521,8 @@ def refile_references(config: Config, apply: bool = False) -> dict:
     """File existing generated paper notes into ``<references_dir>/<Subject>/``.
 
     The subject is derived without the LLM, in this order:
-    frontmatter ``Domain`` -> taxonomy heuristic -> concept majority vote.
+    frontmatter ``Domain``/``Subdomain`` -> taxonomy heuristic -> concept
+    majority vote.
     Wikilinks resolve by basename, so moving notes is link-safe; the store's
     ``note_path`` rows are updated to follow.
     """
@@ -533,11 +553,11 @@ def refile_references(config: Config, apply: bool = False) -> dict:
     for note in sorted(refs.rglob("*.md")):
         if not obsidian.is_generated_note(note):
             continue
-        subject = _paper_domain_for_note(note, domain_of, candidates)
+        subject, subdomain = _paper_domain_for_note(note, domain_of, candidates)
         if not subject:
             _log(f"  · no subject found (kept in place): {note.stem}")
             continue
-        dest_dir = obsidian.reference_subject_folder(config, subject)
+        dest_dir = obsidian.reference_classification_folder(config, subject, subdomain)
         if note.parent.resolve() == dest_dir.resolve():
             continue
         dest = dest_dir / note.name
@@ -579,16 +599,26 @@ def refile_references(config: Config, apply: bool = False) -> dict:
 
 def _paper_domain_for_note(
     note: Path, domain_of: dict[str, str], candidates: list[str]
-) -> str:
+) -> tuple[str, str]:
     """Domain for an existing paper note, preferring explicit classification."""
     fm = obsidian._read_frontmatter(note)
+    subdomain = ""
     for key in ("Domain", "primary_domain", "Primary Domain"):
         value = fm.get(key)
         if isinstance(value, str) and value.strip():
-            return taxonomy.normalize_domain(value, candidates)
+            domain = taxonomy.normalize_domain(value, candidates)
+            for sub_key in ("Subdomain", "subdomain", "Primary Subdomain"):
+                sub_value = fm.get(sub_key)
+                if isinstance(sub_value, str) and sub_value.strip():
+                    subdomain = taxonomy.normalize_subdomain(sub_value, domain)
+                    break
+            return domain, subdomain
     text = obsidian._read_text_tolerant(note)
     guessed = taxonomy.classify_text_heuristic(text[:12000], candidates)
-    return guessed or _subject_vote(note, domain_of)
+    if guessed:
+        return guessed, ""
+    voted = _subject_vote(note, domain_of)
+    return voted, ""
 
 
 def _subject_vote(note: Path, domain_of: dict[str, str]) -> str:

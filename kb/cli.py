@@ -118,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_refile = sub.add_parser(
         "refile",
-        help="File existing paper notes into <references>/<Subject>/ folders",
+        help="File existing paper notes into <references>/<Domain>/<Subdomain>/ folders",
     )
     p_refile.add_argument(
         "--apply",

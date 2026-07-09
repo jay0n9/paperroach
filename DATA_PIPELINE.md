@@ -26,7 +26,7 @@ Current local configuration is read from `kb.toml`.
 |---|---|---|---|
 | PDF paper | Manual `paperroach build <pdf>` or Zotero watcher | `kb/ingest.py` | Markdown text |
 | Markdown note | Manual `paperroach build <md>` | `kb/ingest.py` | Original note text |
-| Zotero metadata | Zotero SQLite DB | `kb/zotero.py` | Better title, authors, year, tags, URL |
+| Zotero metadata | Zotero SQLite DB | `kb/zotero.py` | Better title, authors, year, tags, URL, venue, DOI |
 | Existing Obsidian notes | Vault folders | `kb/obsidian.py`, `kb/knowledge.py` | Preserved user notes plus managed blocks |
 
 Supported file suffixes:
@@ -42,9 +42,10 @@ Generated notes are skipped on re-ingest if their frontmatter contains
 
 | Output | Location | Owner |
 |---|---|---|
-| Generated paper notes | `<vault>/<references_dir>/<Subject>/*.md` | `kb/obsidian.py` |
+| Generated paper notes | `<vault>/<references_dir>/<Domain>/<Subdomain>/*.md` | `kb/obsidian.py` |
 | Concept notes | `<vault>/<knowledge_library_dir>/<Subject>/*.md` | `kb/knowledge.py` |
-| Paper domain metadata | `Domain`, `Secondary Domains`, `Contribution Type`, `Methods` frontmatter | `kb/llm.py`, `kb/taxonomy.py` |
+| Paper domain metadata | `Domain`, `Subdomain`, `Secondary Domains`, `Contribution Type`, `Methods` frontmatter | `kb/llm.py`, `kb/taxonomy.py` |
+| Bibliographic venue metadata | `Venue`, `Venue Type`, `DOI`, `Volume`, `Issue`, `Pages`, `Publisher` frontmatter | `kb/zotero.py`, `kb/obsidian.py` |
 | Tag registry | `<vault>/<tags_dir>/Tag Registry.md` | `kb/tags.py` |
 | Vector store | `<kb_path>` | `kb/store.py` |
 | Content hash ledger | `<kb_path>/content_hashes.json` | `kb/pipeline.py` |
@@ -65,7 +66,7 @@ flowchart TD
     B --> C["content hash dedupe"]
     C --> D["PASS A0: ingest to Markdown"]
     D --> E["PASS A1: LLM metadata + analysis"]
-    E --> F["paper-domain classification"]
+    E --> F["paper-domain + subdomain classification"]
     F --> G["concept distillation + wiki article draft"]
     G --> H["chunk Markdown"]
     H --> I["unload LLM / load embedder"]
@@ -161,10 +162,14 @@ Steps:
    - summary
    - key contributions
    - methods
+   - venue
+   - venue type
+   - DOI
    - tags
 
 2. Enrich from Zotero if possible:
-   - Zotero title/authors/year/tags/URL override LLM guesses.
+   - Zotero title/authors/year/tags/URL/venue/DOI/volume/issue/pages/publisher
+     override LLM guesses.
 
 3. Extract detailed analysis:
    - TL;DR
@@ -177,6 +182,7 @@ Steps:
 
 4. Classify the paper domain independently from concept folders:
    - `primary_domain`
+   - `subdomain`
    - `secondary_domains`
    - `contribution_type`
    - `methods`
@@ -185,8 +191,9 @@ Steps:
 
    The classifier uses `kb/taxonomy.py` and asks for the paper's main research
    contribution, not incidental tool keywords. For example, a VR relaxation
-   system evaluated with users is filed under `HCI` even if it uses AI-assisted
-   environment generation.
+   system evaluated with users is filed under `HCI / VR/AR Interaction` even if
+   it uses AI-assisted environment generation. A core rendering or geometry
+   paper can be filed under `Computer Science / Computer Graphics`.
 
 5. Distill concept details:
    - explanation

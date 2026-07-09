@@ -108,12 +108,33 @@ def assign_note_location(doc: Document, config: Config) -> None:
     name = _dedupe_against(name, config.references_path, doc.source_path)
     doc.link_target = name
     subject = ""
+    subdomain = ""
     if doc.classification and doc.classification.primary_domain:
         subject = doc.classification.primary_domain.strip()
+        subdomain = doc.classification.subdomain.strip()
     elif doc.analysis:
         subject = (doc.analysis.subject or "").strip()
-    folder = reference_subject_folder(config, subject)
+    folder = reference_classification_folder(config, subject, subdomain)
     doc.note_path = folder / f"{name}.md"
+
+
+def reference_classification_folder(
+    config: Config, domain: str, subdomain: str = ""
+) -> Path:
+    """The folder a paper note belongs in: <references>/<Domain>/<Subdomain>."""
+    folder = reference_subject_folder(config, domain)
+    if (
+        not config.references_by_subject
+        or not config.references_by_subdomain
+        or not subdomain.strip()
+    ):
+        return folder
+    safe = safe_note_name(subdomain)
+    if folder.exists():
+        for d in folder.iterdir():
+            if d.is_dir() and d.name.lower() == safe.lower():
+                return d
+    return folder / safe
 
 
 def reference_subject_folder(config: Config, subject: str) -> Path:
@@ -168,7 +189,7 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
     # Preserve the original Date across re-runs; only stamp it on first write.
     # A date object dumps unquoted (2026-06-20), matching the vault convention.
     date = _existing_date(doc.note_path) or _dt.date.today()
-    source = meta.source_url or str(doc.source_path)
+    source = meta.source_url or (_doi_url(meta.doi) if meta.doi else str(doc.source_path))
     frontmatter = {
         "Date": date,
         "Type": ["Paper"],
@@ -181,9 +202,25 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
         "kb-source": str(doc.source_path),
         "kb-doc-id": doc.doc_id,
     }
+    if meta.venue:
+        frontmatter["Venue"] = meta.venue
+    if meta.venue_type:
+        frontmatter["Venue Type"] = meta.venue_type
+    if meta.doi:
+        frontmatter["DOI"] = meta.doi
+    if meta.volume:
+        frontmatter["Volume"] = meta.volume
+    if meta.issue:
+        frontmatter["Issue"] = meta.issue
+    if meta.pages:
+        frontmatter["Pages"] = meta.pages
+    if meta.publisher:
+        frontmatter["Publisher"] = meta.publisher
     cls = doc.classification
     if cls and cls.primary_domain:
         frontmatter["Domain"] = cls.primary_domain
+        if cls.subdomain:
+            frontmatter["Subdomain"] = cls.subdomain
         if cls.secondary_domains:
             frontmatter["Secondary Domains"] = cls.secondary_domains
         if cls.contribution_type:
@@ -199,6 +236,10 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
         out.append(f"> - **Authors:** {', '.join(meta.authors)}")
     if meta.year:
         out.append(f"> - **Year:** {meta.year}")
+    if meta.venue:
+        out.append(f"> - **Venue:** {meta.venue}")
+    if meta.doi:
+        out.append(f"> - **DOI:** {meta.doi}")
     out.append(f"> - **Link:** {source}")
     out.append("")
 
@@ -293,7 +334,18 @@ def _mm_clean(text: str) -> str:
 def _citation(meta) -> str:
     author = _format_authors(meta.authors) or "Unknown"
     year = meta.year if meta.year else "n.d."
-    return f'{author}, "{meta.title}", {year}.'
+    venue = f", {meta.venue}" if meta.venue else ""
+    doi = f" doi:{meta.doi}" if meta.doi else ""
+    return f'{author}, "{meta.title}", {year}{venue}.{doi}'
+
+
+def _doi_url(doi: str) -> str:
+    doi = str(doi or "").strip()
+    if not doi:
+        return ""
+    if doi.lower().startswith("http"):
+        return doi
+    return f"https://doi.org/{doi}"
 
 
 def _format_authors(authors: list[str]) -> str:

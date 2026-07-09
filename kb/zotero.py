@@ -3,9 +3,10 @@
 * Auto-detect the Zotero data directory (honouring a custom ``dataDir`` set in
   the Zotero profile, e.g. ``D:\\Zotero``).
 * Enumerate attachment PDFs under ``storage/``.
-* Best-effort metadata enrichment: read title / authors / year / tags straight
-  from ``zotero.sqlite`` (read-only) so generated notes use Zotero's clean
-  bibliographic data instead of LLM guesses from possibly-OCR'd text.
+* Best-effort metadata enrichment: read title / authors / year / venue / DOI /
+  tags straight from ``zotero.sqlite`` (read-only) so generated notes use
+  Zotero's clean bibliographic data instead of LLM guesses from
+  possibly-OCR'd text.
 
 All DB access is read-only and defensive: any failure (locked DB, schema
 variance, non-Zotero path) simply returns ``None`` and the pipeline falls back
@@ -143,7 +144,7 @@ def _snapshot_and_open(db: Path) -> tuple[sqlite3.Connection | None, Path | None
 
 
 def read_metadata(data_dir: Path, pdf_path: Path) -> dict | None:
-    """Return {title, authors, year, tags} for a storage PDF, or None."""
+    """Return bibliographic metadata for a storage PDF, or None."""
     db = data_dir / "zotero.sqlite"
     if not db.exists():
         return None
@@ -162,6 +163,7 @@ def read_metadata(data_dir: Path, pdf_path: Path) -> dict | None:
         ).fetchone()
         target = par[0] if par and par[0] else att_id
 
+        item_type = _item_type(cur, target)
         title = _field(cur, target, "title")
         date = _field(cur, target, "date")
         year = None
@@ -191,8 +193,27 @@ def read_metadata(data_dir: Path, pdf_path: Path) -> dict | None:
                 tags.append(tag)
 
         url = _field(cur, target, "url")
+        doi = _field(cur, target, "DOI") or _field(cur, target, "doi")
+        volume = _field(cur, target, "volume")
+        issue = _field(cur, target, "issue")
+        pages = _field(cur, target, "pages")
+        publisher = _field(cur, target, "publisher")
+        venue = _first_field(
+            cur,
+            target,
+            [
+                "publicationTitle",
+                "proceedingsTitle",
+                "conferenceName",
+                "bookTitle",
+                "seriesTitle",
+                "websiteTitle",
+                "university",
+                "publisher",
+            ],
+        )
 
-        if not (title or authors or year or tags or url):
+        if not (title or authors or year or tags or url or venue or doi):
             return None
         return {
             "title": title,
@@ -200,6 +221,13 @@ def read_metadata(data_dir: Path, pdf_path: Path) -> dict | None:
             "year": year,
             "tags": tags,
             "url": url,
+            "venue": venue,
+            "venue_type": item_type,
+            "doi": doi,
+            "volume": volume,
+            "issue": issue,
+            "pages": pages,
+            "publisher": publisher,
         }
     except sqlite3.Error:
         return None
@@ -216,6 +244,26 @@ def _field(cur: sqlite3.Cursor, item_id: int, field_name: str) -> str | None:
         "JOIN fields f ON f.fieldID = d.fieldID "
         "WHERE d.itemID = ? AND f.fieldName = ?",
         (item_id, field_name),
+    ).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def _first_field(
+    cur: sqlite3.Cursor, item_id: int, field_names: list[str]
+) -> str | None:
+    for name in field_names:
+        value = _field(cur, item_id, name)
+        if value:
+            return value
+    return None
+
+
+def _item_type(cur: sqlite3.Cursor, item_id: int) -> str | None:
+    row = cur.execute(
+        "SELECT it.typeName FROM items i "
+        "JOIN itemTypes it ON it.itemTypeID = i.itemTypeID "
+        "WHERE i.itemID = ?",
+        (item_id,),
     ).fetchone()
     return row[0] if row and row[0] else None
 
@@ -252,4 +300,18 @@ def enrich(metadata: PaperMetadata, source_path: Path, config: Config) -> PaperM
         metadata.tags = list(dict.fromkeys([*info["tags"], *metadata.tags]))
     if info.get("url"):
         metadata.source_url = info["url"]
+    if info.get("venue"):
+        metadata.venue = info["venue"]
+    if info.get("venue_type"):
+        metadata.venue_type = info["venue_type"]
+    if info.get("doi"):
+        metadata.doi = info["doi"]
+    if info.get("volume"):
+        metadata.volume = info["volume"]
+    if info.get("issue"):
+        metadata.issue = info["issue"]
+    if info.get("pages"):
+        metadata.pages = info["pages"]
+    if info.get("publisher"):
+        metadata.publisher = info["publisher"]
     return metadata

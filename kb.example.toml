@@ -15,6 +15,10 @@ references_dir = "References"
 # existing notes. Wikilinks resolve by basename, so moves are link-safe.
 references_by_subject = true
 
+# If available, nest generated paper notes one level deeper:
+# <references_dir>/<Domain>/<Subdomain>/*.md
+references_by_subdomain = true
+
 # Where auto-distilled concept notes are filed (relative to vault). The LLM
 # picks an existing subfolder (domain) when one fits, else proposes a new one.
 knowledge_library_dir = "6 - Knowledge Library"

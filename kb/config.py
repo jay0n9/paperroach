@@ -34,6 +34,7 @@ _BOOL_FIELDS = {
     "zotero_enrich",
     "create_concept_notes",
     "references_by_subject",
+    "references_by_subdomain",
 }
 _INT_FIELDS = {
     "llm_num_ctx",
@@ -93,6 +94,9 @@ class Config:
     # File paper notes into <references_dir>/<Subject>/ (the same domain the
     # LLM picks for the paper's concepts) instead of one flat folder.
     references_by_subject: bool = True
+    # If a paper-domain classifier returns a subdomain, nest paper notes under
+    # <references_dir>/<Domain>/<Subdomain>/.
+    references_by_subdomain: bool = True
 
     # ── Zotero integration ───────────────────────────────────────────
     zotero_dir: str = ""          # "" → auto-detect from the Zotero profile

@@ -79,6 +79,20 @@ DOMAIN_RULES = [
         ),
         "positive_cues": [
             "algorithm",
+            "computer vision",
+            "image",
+            "video",
+            "recognition",
+            "face recognition",
+            "facial recognition",
+            "face reconstruction",
+            "3d face",
+            "shape model",
+            "active shape model",
+            "point distribution model",
+            "body model",
+            "skinned multi-person",
+            "blend skinning",
             "runtime",
             "compiler",
             "database",
@@ -141,9 +155,251 @@ DOMAIN_RULES = [
     },
 ]
 
+SUBDOMAIN_RULES = {
+    "Computer Science": [
+        {
+            "name": "Algorithms & Theory",
+            "positive_cues": [
+                "algorithm",
+                "complexity",
+                "data structure",
+                "approximation",
+                "theorem",
+                "proof",
+                "graph algorithm",
+            ],
+        },
+        {
+            "name": "Artificial Intelligence",
+            "positive_cues": [
+                "artificial intelligence",
+                "planning",
+                "reasoning",
+                "agent",
+                "knowledge representation",
+                "reinforcement learning",
+            ],
+        },
+        {
+            "name": "Machine Learning",
+            "positive_cues": [
+                "machine learning",
+                "deep learning",
+                "neural network",
+                "training",
+                "classification",
+                "representation learning",
+                "self-supervised",
+            ],
+        },
+        {
+            "name": "Computer Vision",
+            "positive_cues": [
+                "computer vision",
+                "image recognition",
+                "face recognition",
+                "facial recognition",
+                "object detection",
+                "segmentation",
+                "pose estimation",
+                "facial expression",
+                "active shape model",
+                "point distribution model",
+                "3d reconstruction",
+            ],
+        },
+        {
+            "name": "Computer Graphics",
+            "positive_cues": [
+                "computer graphics",
+                "rendering",
+                "mesh",
+                "animation",
+                "geometry processing",
+                "avatar",
+                "body model",
+                "skinned multi-person",
+                "blend skinning",
+                "facial shape",
+                "blendshape",
+            ],
+        },
+        {
+            "name": "Systems & Networking",
+            "positive_cues": [
+                "operating system",
+                "distributed system",
+                "network",
+                "runtime",
+                "scheduler",
+                "throughput",
+                "latency",
+            ],
+        },
+        {
+            "name": "Databases & Information Retrieval",
+            "positive_cues": [
+                "database",
+                "query processing",
+                "indexing",
+                "information retrieval",
+                "search engine",
+                "ranking",
+            ],
+        },
+        {
+            "name": "Software Engineering",
+            "positive_cues": [
+                "software engineering",
+                "program analysis",
+                "testing",
+                "debugging",
+                "code generation",
+                "developer tools",
+            ],
+        },
+        {
+            "name": "Programming Languages",
+            "positive_cues": [
+                "programming language",
+                "compiler",
+                "type system",
+                "static analysis",
+                "interpreter",
+                "syntax",
+            ],
+        },
+        {
+            "name": "Security & Privacy",
+            "positive_cues": [
+                "security",
+                "privacy",
+                "cryptography",
+                "attack",
+                "malware",
+                "vulnerability",
+                "differential privacy",
+            ],
+        },
+    ],
+    "HCI": [
+        {
+            "name": "VR/AR Interaction",
+            "positive_cues": [
+                "virtual reality",
+                "augmented reality",
+                "mixed reality",
+                "presence",
+                "immersive",
+                "head-mounted display",
+            ],
+        },
+        {
+            "name": "User Experience & Usability",
+            "positive_cues": [
+                "user experience",
+                "usability",
+                "questionnaire",
+                "interview",
+                "qualitative feedback",
+            ],
+        },
+        {
+            "name": "Health & Wellbeing",
+            "positive_cues": [
+                "wellbeing",
+                "mental health",
+                "relaxation",
+                "anxiety",
+                "therapy",
+                "biofeedback",
+            ],
+        },
+        {
+            "name": "Creativity & Design Tools",
+            "positive_cues": [
+                "design tool",
+                "creativity",
+                "co-creation",
+                "personalization",
+                "art therapy",
+            ],
+        },
+        {
+            "name": "CSCW & Social Computing",
+            "positive_cues": [
+                "collaboration",
+                "social computing",
+                "cscw",
+                "community",
+                "group work",
+            ],
+        },
+    ],
+    "Generative AI": [
+        {
+            "name": "Image Generation",
+            "positive_cues": ["text-to-image", "image generation", "diffusion image"],
+        },
+        {
+            "name": "Video Generation",
+            "positive_cues": ["video generation", "text-to-video", "temporal"],
+        },
+        {
+            "name": "3D Generation",
+            "positive_cues": ["3d generation", "mesh generation", "neural rendering"],
+        },
+        {
+            "name": "Language Models",
+            "positive_cues": ["large language model", "llm", "text generation"],
+        },
+        {
+            "name": "Generative Evaluation",
+            "positive_cues": ["benchmark", "evaluation", "fid", "human preference"],
+        },
+    ],
+    "Statistics": [
+        {
+            "name": "Statistical Inference",
+            "positive_cues": ["hypothesis test", "confidence interval", "p-value"],
+        },
+        {
+            "name": "Regression & Causal Analysis",
+            "positive_cues": ["regression", "causal", "treatment effect"],
+        },
+        {
+            "name": "Experimental Design",
+            "positive_cues": ["experimental design", "statistical power", "sample size"],
+        },
+    ],
+    "Mathematics": [
+        {
+            "name": "Linear Algebra",
+            "positive_cues": ["linear algebra", "matrix", "eigenvalue"],
+        },
+        {
+            "name": "Optimization",
+            "positive_cues": ["optimization", "convex", "gradient"],
+        },
+        {
+            "name": "Probability Theory",
+            "positive_cues": ["probability theory", "random variable", "distribution"],
+        },
+    ],
+}
+
 
 def domain_names() -> list[str]:
     return [d["name"] for d in DOMAIN_RULES]
+
+
+def subdomain_names(domain: str | None = None) -> list[str]:
+    if domain:
+        return [d["name"] for d in SUBDOMAIN_RULES.get(normalize_domain(domain), [])]
+    out: list[str] = []
+    for rules in SUBDOMAIN_RULES.values():
+        out.extend(d["name"] for d in rules)
+    return out
 
 
 def prompt_block(extra_domains: list[str] | None = None) -> str:
@@ -164,12 +420,38 @@ def prompt_block(extra_domains: list[str] | None = None) -> str:
     return "\n".join(lines)
 
 
+def subdomain_prompt_block() -> str:
+    """Human-readable subdomain taxonomy for the LLM classifier prompt."""
+    lines = []
+    for domain, rules in SUBDOMAIN_RULES.items():
+        items = []
+        for rule in rules:
+            cues = ", ".join(rule["positive_cues"][:6])
+            items.append(f"  - {rule['name']}: cues include {cues}")
+        lines.append(f"{domain}:\n" + "\n".join(items))
+    return "\n".join(lines)
+
+
 def normalize_domain(name: str, candidates: list[str] | None = None) -> str:
     """Return a canonical candidate casing when possible."""
     raw = re.sub(r"\s+", " ", str(name or "")).strip()
     if not raw:
         return ""
     lookup = {d.lower(): d for d in domain_names()}
+    for c in candidates or []:
+        if c:
+            lookup.setdefault(str(c).strip().lower(), str(c).strip())
+    return lookup.get(raw.lower(), raw)
+
+
+def normalize_subdomain(
+    name: str, primary_domain: str | None = None, candidates: list[str] | None = None
+) -> str:
+    """Return canonical subdomain casing when possible."""
+    raw = re.sub(r"\s+", " ", str(name or "")).strip()
+    if not raw:
+        return ""
+    lookup = {d.lower(): d for d in subdomain_names(primary_domain)}
     for c in candidates or []:
         if c:
             lookup.setdefault(str(c).strip().lower(), str(c).strip())
@@ -200,7 +482,12 @@ def classify_text_heuristic(text: str, candidates: list[str] | None = None) -> s
         score = 0
         for cue in domain["positive_cues"]:
             if _cue_present(hay, cue):
-                score += 3 if domain["name"] == "HCI" else 2
+                if domain["name"] == "HCI":
+                    score += 3
+                elif domain["name"] in {"Computer Science", "Statistics"}:
+                    score += 3
+                else:
+                    score += 2
         scores[domain["name"]] = score
 
     # Strong HCI override: human evaluation + interactive/VR/wellbeing context.
@@ -219,6 +506,30 @@ def classify_text_heuristic(text: str, candidates: list[str] | None = None) -> s
     if score < 4:
         return ""
     return normalize_domain(best, candidates)
+
+
+def classify_subdomain_heuristic(
+    text: str, primary_domain: str, candidates: list[str] | None = None
+) -> str:
+    """Best-effort subdomain for an already-chosen primary domain."""
+    domain = normalize_domain(primary_domain)
+    hay = " ".join(str(text or "").lower().split())
+    if not hay or not domain:
+        return ""
+    rules = SUBDOMAIN_RULES.get(domain, [])
+    if not rules:
+        return ""
+    scores: dict[str, int] = {}
+    for rule in rules:
+        score = 0
+        for cue in rule["positive_cues"]:
+            if _cue_present(hay, cue):
+                score += 2
+        scores[rule["name"]] = score
+    best, score = max(scores.items(), key=lambda kv: (kv[1], kv[0]))
+    if score < 2:
+        return ""
+    return normalize_subdomain(best, domain, candidates)
 
 
 def _cue_present(text: str, cue: str) -> bool:

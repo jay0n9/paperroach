@@ -32,10 +32,11 @@ Obsidian notes, concept notes, tags, related-paper links
 
 - Ingest PDFs and Markdown notes.
 - Auto-detect Zotero storage and process new attachment PDFs.
-- Enrich notes from Zotero bibliographic metadata when available.
+- Enrich notes from Zotero bibliographic metadata, including venue and DOI,
+  when available.
 - Generate detailed English paper notes for Obsidian.
-- Classify papers into research domains such as HCI, Generative AI, Computer
-  Science, Statistics, and Mathematics.
+- Classify papers into research domains and subdomains, such as
+  `Computer Science / Computer Graphics` or `HCI / VR/AR Interaction`.
 - Create merge-safe Knowledge Library concept notes.
 - Maintain a controlled tag registry with aliases.
 - Search and ask questions over the local library using LanceDB and Ollama.
@@ -108,7 +109,7 @@ For each input, PaperRoach:
 PDFs become generated paper notes under:
 
 ```text
-<vault>/<references_dir>/<Domain>/*.md
+<vault>/<references_dir>/<Domain>/<Subdomain>/*.md
 ```
 
 Markdown notes are indexed for search and related-linking. Existing user notes
@@ -127,11 +128,15 @@ Status: Unread
 Authors: Tianye Li et al.
 Year: 2017
 Domain: Computer Science
+Subdomain: Computer Graphics
 Secondary Domains:
 - HCI
 Contribution Type: method
 Methods:
 - statistical shape modeling
+Venue: ACM Transactions on Graphics
+Venue Type: journalArticle
+DOI: 10.1145/example
 Source: https://example.org/paper
 tags: [paper, face-model]
 kb-generated: true
@@ -177,10 +182,11 @@ tool keywords as the research area.
 The classifier combines:
 
 - A controlled taxonomy in `kb/taxonomy.py`.
+- A controlled subdomain taxonomy for nested filing and frontmatter.
 - An LLM classification pass in `kb/llm.py`.
 - A heuristic fallback when the LLM is unavailable.
 - Frontmatter persistence through `Domain`, `Secondary Domains`,
-  `Contribution Type`, and `Methods`.
+  `Subdomain`, `Contribution Type`, and `Methods`.
 
 ## Zotero Watcher
 
@@ -199,6 +205,10 @@ paperroach watch --zotero-dir "D:/Zotero"
 New PDFs under `storage/` are built once, keyed by path and content hash. Failed
 builds are retried on later cycles, and a `watch.lock` heartbeat prevents two
 watchers from racing on the same store.
+
+When a PDF is a Zotero attachment, PaperRoach reads bibliographic fields from
+`zotero.sqlite` in read-only mode: title, authors, year, tags, URL, venue,
+item type, DOI, volume, issue, pages, and publisher.
 
 ## Query
 
