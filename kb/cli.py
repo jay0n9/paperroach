@@ -125,6 +125,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Actually move the notes (default: dry run / plan only)",
     )
+    p_refile.add_argument(
+        "--plan-out",
+        dest="plan_out",
+        help="Write a Markdown review plan for planned, skipped, and blocked moves",
+    )
     _add_common(p_refile)
     p_refile.set_defaults(func=cmd_refile)
 
@@ -349,7 +354,8 @@ def cmd_refile(args: argparse.Namespace) -> int:
     from kb import pipeline
 
     config = _config_from_args(args)
-    pipeline.refile_references(config, apply=args.apply)
+    plan_out = Path(args.plan_out) if args.plan_out else None
+    pipeline.refile_references(config, apply=args.apply, plan_out=plan_out)
     return 0
 
 

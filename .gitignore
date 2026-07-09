@@ -23,6 +23,7 @@ kb.toml
 kb_backups/
 *.log
 *.old
+refile-plan*.md
 
 # Local watcher / machine wrappers
 kb-watch.cmd

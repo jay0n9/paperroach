@@ -45,6 +45,22 @@ class TaxonomyTests(unittest.TestCase):
             ("Statistics", "Statistical Inference"),
         )
 
+    def test_plural_statistics_metadata_cues(self):
+        text = "Equivalence Tests A Practical Primer for t Tests Correlations and Meta-Analyses"
+
+        self.assertEqual(
+            taxonomy.classify_subdomain_any(text),
+            ("Statistics", "Statistical Inference"),
+        )
+
+    def test_rank_test_metadata_cues(self):
+        text = "Estimates of Location Based on Rank Tests"
+
+        self.assertEqual(
+            taxonomy.classify_subdomain_any(text),
+            ("Statistics", "Statistical Inference"),
+        )
+
     def test_hci_wellbeing_metadata(self):
         text = "paper vr relaxation art-therapy anxiety participant-study"
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -49,7 +50,12 @@ from kb.store import KBStore
 
 
 def _log(msg: str) -> None:
-    print(msg, flush=True)
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        safe = msg.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe, flush=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -517,11 +523,14 @@ def relink(config: Config) -> dict:
     return {"updated": updated, "concepts_linked": concept_linked}
 
 
-def refile_references(config: Config, apply: bool = False) -> dict:
+def refile_references(
+    config: Config, apply: bool = False, plan_out: Path | None = None
+) -> dict:
     """File generated paper notes into ``<references>/<Domain>/<Subdomain>/``.
 
     The subject is derived without the LLM, in this order:
-    frontmatter ``Domain``/``Subdomain`` -> taxonomy heuristic -> concept
+    explicit frontmatter ``Domain``/``Subdomain`` -> metadata fields such as
+    tags, venue, DOI/source, and title -> compact body sections -> concept
     majority vote.
     Wikilinks resolve by basename, so moving notes is link-safe; the store's
     ``note_path`` rows are updated to follow.
@@ -550,29 +559,47 @@ def refile_references(config: Config, apply: bool = False) -> dict:
     }
 
     moves: list[tuple[Path, Path, str, str]] = []
+    plan_rows: list[dict[str, str]] = []
     for note in sorted(refs.rglob("*.md")):
         if not obsidian.is_generated_note(note):
             continue
-        subject, subdomain = _paper_domain_for_note(note, domain_of, candidates)
+        filing = _paper_filing_for_note(note, domain_of, candidates)
+        subject, subdomain = filing["domain"], filing["subdomain"]
         if not subject:
-            _log(f"  · no subject found (kept in place): {note.stem}")
+            _log(f"  - no subject found (kept in place): {note.stem}")
+            plan_rows.append(
+                _refile_plan_row("kept-no-domain", note, None, "", "", filing["source"], refs)
+            )
             continue
         dest_dir = obsidian.reference_classification_folder(config, subject, subdomain)
         if note.parent.resolve() == dest_dir.resolve():
+            plan_rows.append(
+                _refile_plan_row("already-filed", note, note, subject, subdomain, filing["source"], refs)
+            )
             continue
         dest = dest_dir / note.name
         if dest.exists():
             _log(f"  ! not moved (name already exists at target): {note.name}")
+            plan_rows.append(
+                _refile_plan_row("blocked-conflict", note, dest, subject, subdomain, filing["source"], refs)
+            )
             continue
         moves.append((note, dest, subject, subdomain))
-        _log(f"  {note.stem}  →  {dest_dir.relative_to(refs)}/")
+        plan_rows.append(
+            _refile_plan_row("move", note, dest, subject, subdomain, filing["source"], refs)
+        )
+        _log(f"  {note.stem}  ->  {dest_dir.relative_to(refs)}/")
 
     if not moves:
         _log("Nothing to refile.")
+        if plan_out:
+            _write_refile_plan(plan_out, plan_rows, refs, apply, moved=0)
         return {"moved": 0}
     if not apply:
-        _log(f"\nDry run — {len(moves)} move(s) planned. Re-run with --apply.")
-        return {"moved": 0}
+        if plan_out:
+            _write_refile_plan(plan_out, plan_rows, refs, apply, moved=0)
+        _log(f"\nDry run -- {len(moves)} move(s) planned. Re-run with --apply.")
+        return {"moved": 0, "planned": len(moves)}
 
     moved = 0
     for src, dest, subject, subdomain in moves:
@@ -594,13 +621,22 @@ def refile_references(config: Config, apply: bool = False) -> dict:
                 d.rmdir()
         except OSError:
             pass
+    if plan_out:
+        _write_refile_plan(plan_out, plan_rows, refs, apply, moved=moved)
     _log(f"Moved {moved} note(s) into domain/subdomain folders.")
-    return {"moved": moved}
+    return {"moved": moved, "planned": len(moves)}
 
 
 def _paper_domain_for_note(
     note: Path, domain_of: dict[str, str], candidates: list[str]
 ) -> tuple[str, str]:
+    filing = _paper_filing_for_note(note, domain_of, candidates)
+    return filing["domain"], filing["subdomain"]
+
+
+def _paper_filing_for_note(
+    note: Path, domain_of: dict[str, str], candidates: list[str]
+) -> dict[str, str]:
     """Domain for an existing paper note, preferring explicit classification."""
     fm = obsidian._read_frontmatter(note)
     metadata_text = _note_metadata_text(note, fm)
@@ -617,22 +653,35 @@ def _paper_domain_for_note(
                 subdomain = taxonomy.classify_subdomain_heuristic(
                     _note_body_classification_text(note), domain
                 )
-            return domain, subdomain
+                source = "body" if subdomain else "frontmatter-domain"
+            else:
+                source = "frontmatter-subdomain" if _frontmatter_subdomain(fm, domain) else "metadata"
+            return {"domain": domain, "subdomain": subdomain, "source": source}
     if explicit_subdomain:
         domain = taxonomy.domain_for_subdomain(explicit_subdomain)
         if domain:
-            return taxonomy.normalize_domain(domain, candidates), explicit_subdomain
+            return {
+                "domain": taxonomy.normalize_domain(domain, candidates),
+                "subdomain": explicit_subdomain,
+                "source": "frontmatter-subdomain",
+            }
     if metadata_domain and metadata_subdomain:
-        return taxonomy.normalize_domain(metadata_domain, candidates), metadata_subdomain
+        return {
+            "domain": taxonomy.normalize_domain(metadata_domain, candidates),
+            "subdomain": metadata_subdomain,
+            "source": "metadata",
+        }
     text = obsidian._read_text_tolerant(note)
     guessed = taxonomy.classify_text_heuristic(text[:12000], candidates)
     if guessed:
         subdomain = taxonomy.classify_subdomain_heuristic(metadata_text, guessed)
+        source = "metadata" if subdomain else "body-domain"
         if not subdomain:
             subdomain = taxonomy.classify_subdomain_heuristic(
                 _note_body_classification_text(note, text), guessed
             )
-        return guessed, subdomain
+            source = "body" if subdomain else source
+        return {"domain": guessed, "subdomain": subdomain, "source": source}
     voted = _subject_vote(note, domain_of)
     subdomain = (
         taxonomy.classify_subdomain_heuristic(metadata_text, voted)
@@ -640,7 +689,77 @@ def _paper_domain_for_note(
         if voted
         else ""
     )
-    return voted, subdomain
+    source = "concept-vote"
+    if voted and subdomain:
+        source = "metadata" if taxonomy.classify_subdomain_heuristic(metadata_text, voted) else "body"
+    return {"domain": voted, "subdomain": subdomain, "source": source}
+
+
+def _refile_plan_row(
+    status: str,
+    src: Path,
+    dest: Path | None,
+    domain: str,
+    subdomain: str,
+    source: str,
+    refs: Path,
+) -> dict[str, str]:
+    return {
+        "status": status,
+        "source": _rel_for_plan(src, refs),
+        "target": _rel_for_plan(dest, refs) if dest else "",
+        "domain": domain,
+        "subdomain": subdomain,
+        "evidence": source,
+    }
+
+
+def _rel_for_plan(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root)).replace("\\", "/")
+    except ValueError:
+        return str(path).replace("\\", "/")
+
+
+def _write_refile_plan(
+    path: Path,
+    rows: list[dict[str, str]],
+    refs: Path,
+    apply: bool,
+    moved: int,
+) -> Path:
+    path = path.expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    move_count = sum(1 for r in rows if r["status"] == "move")
+    blocked_count = sum(1 for r in rows if r["status"].startswith("blocked"))
+    lines = [
+        "# PaperRoach Refile Plan",
+        "",
+        f"- References root: `{refs}`",
+        f"- Mode: `{'apply' if apply else 'dry-run'}`",
+        f"- Planned moves: {move_count}",
+        f"- Applied moves: {moved}",
+        f"- Blocked: {blocked_count}",
+        "",
+        "| Status | Source | Target | Domain | Subdomain | Evidence |",
+        "|---|---|---|---|---|---|",
+    ]
+    for row in rows:
+        lines.append(
+            "| "
+            + " | ".join(
+                _md_cell(row[key])
+                for key in ("status", "source", "target", "domain", "subdomain", "evidence")
+            )
+            + " |"
+        )
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    _log(f"Refile review plan written -> {path}")
+    return path
+
+
+def _md_cell(value: str) -> str:
+    return str(value or "").replace("|", "/").replace("\n", " ").strip()
 
 
 def _frontmatter_subdomain(fm: dict, domain: str = "") -> str:
@@ -662,6 +781,10 @@ def _note_metadata_text(note: Path, fm: dict) -> str:
         str(fm.get("Venue Type") or ""),
         str(fm.get("DOI") or ""),
         str(fm.get("Source") or ""),
+        str(fm.get("Volume") or ""),
+        str(fm.get("Issue") or ""),
+        str(fm.get("Pages") or ""),
+        str(fm.get("Publisher") or ""),
     ]
     return "\n\n".join(p for p in pieces if p)
 
