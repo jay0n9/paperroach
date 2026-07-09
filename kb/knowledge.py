@@ -279,16 +279,18 @@ def _ensure_list_props(
     items = list(fm.items())
     changed = False
     for key, values, anchor in additions:
-        existing = fm.get(key)
+        key_norm = _frontmatter_key(key)
+        existing_key = next((k for k in fm if _frontmatter_key(k) == key_norm), "")
+        existing = fm.get(existing_key) if existing_key else None
         if existing and not overwrite:
             continue
-        if overwrite and existing == values:
+        if overwrite and existing_key == key and existing == values:
             continue
-        items = [(k, v) for k, v in items if k != key]
+        items = [(k, v) for k, v in items if _frontmatter_key(k) != key_norm]
         rebuilt, inserted = [], False
         for k, v in items:
             rebuilt.append((k, v))
-            if not inserted and k == anchor:
+            if not inserted and _frontmatter_key(k) == _frontmatter_key(anchor):
                 rebuilt.append((key, values))
                 inserted = True
         if not inserted:
@@ -308,6 +310,10 @@ def _ensure_list_props(
         path.write_text(new_text, encoding="utf-8")
         return True
     return False
+
+
+def _frontmatter_key(key: object) -> str:
+    return re.sub(r"[\s_\-]+", "", str(key or "").strip().lower())
 
 
 def link_siblings(config: Config) -> int:

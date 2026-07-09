@@ -110,6 +110,37 @@ class KnowledgeTests(unittest.TestCase):
             self.assertIn("2 start marker(s) and 2 end marker(s)", stdout.getvalue())
             self.assertEqual(note.read_text(encoding="utf-8"), original)
 
+    def test_ensure_list_props_overwrites_case_variant_without_duplicate(self):
+        with tempfile.TemporaryDirectory() as td:
+            note = Path(td) / "Paper.md"
+            note.write_text(
+                "\n".join(
+                    [
+                        "---",
+                        "Status: Unread",
+                        "Tags:",
+                        "- paper",
+                        "- old-tag",
+                        "---",
+                        "# Paper",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            changed = knowledge._ensure_list_props(
+                note,
+                [("tags", ["paper", "new-tag"], "Status")],
+                overwrite=True,
+            )
+
+            self.assertTrue(changed)
+            text = note.read_text(encoding="utf-8")
+            self.assertIn("tags:\n- paper\n- new-tag", text)
+            self.assertNotIn("Tags:", text)
+            self.assertEqual(text.count("tags:"), 1)
+
     def test_append_source_link_adds_source_when_body_mentions_paper(self):
         with tempfile.TemporaryDirectory() as td:
             note = Path(td) / "Concept.md"
