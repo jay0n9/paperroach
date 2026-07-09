@@ -654,6 +654,6 @@ batch. Important boundaries:
 
 ## 14. Recommended Next Improvements
 
-1. Add a small Zotero SQLite fixture to verify venue/DOI/domain/subdomain
-   enrichment against real table shapes.
-2. Document release/versioning steps for publishing tagged builds.
+1. Add a small changelog template for user-facing releases.
+2. Add a schema/version note for future LanceDB or generated-frontmatter
+   migrations.

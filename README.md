@@ -283,6 +283,8 @@ The test suite includes taxonomy regression checks for metadata-first subdomain
 filing, pure-function edge cases, and a stubbed `build -> search -> ask` smoke
 test that exercises the real local store without requiring a live Ollama server.
 
+Release and versioning steps are documented in `RELEASE.md`.
+
 ## PDF Parsing
 
 The default PDF backend is `pymupdf4llm` on CPU. Scanned PDFs can fall back to
