@@ -150,6 +150,32 @@ class CLITests(unittest.TestCase):
             self.assertIn("Summary: 0 failure(s)", output)
             self.assertFalse(config.kb_path.exists())
 
+    def test_stats_does_not_initialize_empty_store(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = self._temp_config(Path(td))
+            stdout = StringIO()
+            with patch.object(cli, "_config_from_args", return_value=config):
+                with redirect_stdout(stdout):
+                    code = main(["stats"])
+
+            output = stdout.getvalue()
+            self.assertEqual(code, 0)
+            self.assertIn("Documents   : 0", output)
+            self.assertIn("Chunks      : 0", output)
+            self.assertFalse(config.kb_path.exists())
+
+    def test_gc_apply_does_not_initialize_empty_store(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = self._temp_config(Path(td))
+            stdout = StringIO()
+            with patch.object(cli, "_config_from_args", return_value=config):
+                with redirect_stdout(stdout):
+                    code = main(["gc", "--apply"])
+
+            self.assertEqual(code, 0)
+            self.assertIn("Store is not initialized", stdout.getvalue())
+            self.assertFalse(config.kb_path.exists())
+
     def test_doctor_fails_on_store_embedding_model_mismatch(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

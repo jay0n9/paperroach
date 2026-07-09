@@ -424,6 +424,7 @@ def cmd_retag(args: argparse.Namespace) -> int:
 
 def cmd_gc(args: argparse.Namespace) -> int:
     from kb import pipeline
+    from kb import store as store_mod
 
     config = _config_from_args(args)
 
@@ -431,7 +432,7 @@ def cmd_gc(args: argparse.Namespace) -> int:
         pipeline.gc(config, apply=args.apply)
         return 0
 
-    if args.apply:
+    if args.apply and store_mod.table_names(config):
         return _run_locked(config, "gc", run)
     return run()
 
@@ -463,11 +464,10 @@ def cmd_integrate_equations(args: argparse.Namespace) -> int:
 
 
 def cmd_stats(args: argparse.Namespace) -> int:
-    from kb.store import KBStore
+    from kb import store as store_mod
 
     config = _config_from_args(args)
-    store = KBStore(config)
-    n_docs, n_chunks = store.counts()
+    n_docs, n_chunks = store_mod.row_counts(config)
     print(f"Vault       : {config.vault_path}")
     print(f"Store       : {config.kb_path}")
     print(f"Documents   : {n_docs}")

@@ -82,6 +82,17 @@ def _write_generated_note(path: Path) -> None:
 
 
 class GCTests(unittest.TestCase):
+    def test_gc_dry_run_does_not_initialize_empty_store(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _cfg(Path(td))
+            cfg.vault_path.mkdir()
+
+            result, output = _capture_gc(cfg, apply=False)
+
+            self.assertEqual(result["removed"], 0)
+            self.assertIn("Store is not initialized", output)
+            self.assertFalse(cfg.kb_path.exists())
+
     def test_gc_dry_run_keeps_orphan_rows(self):
         with tempfile.TemporaryDirectory() as td:
             cfg = _cfg(Path(td))

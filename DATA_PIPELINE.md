@@ -531,6 +531,10 @@ python -u -m paperroach watch
 | `paperroach integrate-equations` | Weave existing Key Equations into Approach prose | Yes, calls LLM |
 | `paperroach wiki` | Rewrite generated concept note bodies as wiki articles | Yes, calls LLM |
 
+Read-only maintenance and query commands do not initialize an empty store. On a
+fresh vault, `stats`, `search`, `ask`, `doctor`, and `gc` report zero counts,
+empty results, or warnings without creating `.kb`.
+
 ## 9. Important Data Identities
 
 ### `doc_id`

@@ -20,7 +20,8 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Fixed
 
-- _None yet._
+- Read-only commands now avoid initializing `.kb` on fresh vaults when the
+  store does not exist yet.
 
 ### Migration Notes
 

@@ -112,6 +112,17 @@ def table_names(config: Config) -> set[str]:
     return _table_names(db)
 
 
+def row_counts(config: Config) -> tuple[int, int]:
+    """Read existing doc/chunk counts without creating missing tables."""
+    names = table_names(config)
+    if not names:
+        return 0, 0
+    db = lancedb.connect(str(config.kb_path))
+    n_docs = db.open_table("docs").count_rows() if "docs" in names else 0
+    n_chunks = db.open_table("chunks").count_rows() if "chunks" in names else 0
+    return n_docs, n_chunks
+
+
 class KBStore:
     def __init__(self, config: Config):
         self.config = config

@@ -268,6 +268,10 @@ Useful maintenance commands:
 - `organize`: plan or apply Knowledge Library folder organization.
 - `gc`: report or remove orphaned store rows and duplicate generated notes.
 
+Read-only commands such as `stats`, `search`, `ask`, `doctor`, and dry-run
+`gc` return empty results or warnings without initializing `.kb` when the store
+does not exist yet.
+
 Commands that can move or rewrite files default to dry-run mode unless `--apply`
 is provided.
 

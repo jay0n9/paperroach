@@ -1,9 +1,39 @@
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from kb import rag
+from kb.config import Config
+
+
+class FailIfConstructedClient:
+    def __init__(self, _config):
+        raise AssertionError("OllamaClient should not be constructed")
 
 
 class RAGFormattingTests(unittest.TestCase):
+    def test_search_empty_store_does_not_initialize_store_or_ollama(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = Config(vault_path=Path(td) / "vault", kb_dir=".kb")
+            config.vault_path.mkdir()
+            with patch.object(rag, "OllamaClient", FailIfConstructedClient):
+                rows = rag.search("anything", config)
+
+            self.assertEqual(rows, [])
+            self.assertFalse(config.kb_path.exists())
+
+    def test_ask_empty_store_does_not_initialize_store_or_ollama(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = Config(vault_path=Path(td) / "vault", kb_dir=".kb")
+            config.vault_path.mkdir()
+            with patch.object(rag, "OllamaClient", FailIfConstructedClient):
+                answer = rag.ask("anything", config)
+
+            self.assertEqual(answer["sources"], [])
+            self.assertIn("No relevant evidence", answer["answer"])
+            self.assertFalse(config.kb_path.exists())
+
     def test_context_escapes_untrusted_angle_brackets(self):
         context = rag._build_context(
             [

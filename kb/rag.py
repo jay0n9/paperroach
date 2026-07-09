@@ -12,9 +12,9 @@ from __future__ import annotations
 import html
 from pathlib import PureWindowsPath
 
+from kb import store as store_mod
 from kb.config import Config
 from kb.ollama_client import OllamaClient
-from kb.store import KBStore
 
 _ASK_SYSTEM = (
     "You are a research assistant for the user's personal knowledge library. "
@@ -29,8 +29,10 @@ _ASK_SYSTEM = (
 
 def search(query: str, config: Config, k: int | None = None) -> list[dict]:
     k = k or config.rag_top_k
+    if "chunks" not in store_mod.table_names(config):
+        return []
     client = OllamaClient(config)
-    store = KBStore(config)
+    store = store_mod.KBStore(config)
     client.unload_llm()  # a resident LLM (keep_alive) would co-reside on 8GB
     qvec = client.embed_one(query)
     return store.search_chunks(qvec, k)
@@ -52,8 +54,13 @@ def format_search_results(rows: list[dict]) -> str:
 
 def ask(query: str, config: Config, k: int | None = None) -> dict:
     k = k or config.rag_top_k
+    if "chunks" not in store_mod.table_names(config):
+        return {
+            "answer": "No relevant evidence was found in the knowledge library.",
+            "sources": [],
+        }
     client = OllamaClient(config)
-    store = KBStore(config)
+    store = store_mod.KBStore(config)
 
     # Embedder phase.
     client.unload_llm()  # a resident LLM (keep_alive) would co-reside on 8GB

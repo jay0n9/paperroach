@@ -49,7 +49,7 @@ from kb.models import (
     doc_id_for,
 )
 from kb.ollama_client import OllamaClient, OllamaError
-from kb.store import KBStore
+from kb.store import KBStore, table_names
 
 
 def _log(msg: str) -> None:
@@ -1333,6 +1333,10 @@ def gc(config: Config, apply: bool = False) -> dict:
       the copy with the extra " (2)"-style filename is dropped, including its
       generated note.
     """
+    if not table_names(config):
+        _log("Store is not initialized -- nothing to clean.")
+        return {"removed": 0}
+
     store = KBStore(config)
     docs = store.all_docs(
         columns=["doc_id", "title", "year", "kind", "note_path", "link_target"]
