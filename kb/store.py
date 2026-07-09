@@ -74,7 +74,7 @@ class KBStore:
         )
 
     def _open_or_create(self, name: str, schema: pa.Schema):
-        if name in self.db.table_names():
+        if name in _table_names(self.db):
             table = self.db.open_table(name)
             self._check_dim(name, table)
             return table
@@ -248,3 +248,12 @@ class KBStore:
 
     def concept_count(self) -> int:
         return self.concepts.count_rows()
+
+
+def _table_names(db) -> set[str]:
+    """Return table names across LanceDB versions without deprecated calls."""
+    list_tables = getattr(db, "list_tables", None)
+    if callable(list_tables):
+        result = list_tables()
+        return set(getattr(result, "tables", result))
+    return set(db.table_names())
