@@ -370,17 +370,22 @@ def _coerce_classification(
     obj: dict, candidates: list[str], fallback_text: str, metadata_text: str = ""
 ) -> PaperClassification:
     metadata_domain, metadata_subdomain = taxonomy.classify_subdomain_any(metadata_text)
-    primary = taxonomy.normalize_domain(
-        _s(obj.get("primary_domain") or obj.get("domain")), candidates
-    )
-    if not primary and metadata_domain:
+    primary = ""
+    subdomain = ""
+    if metadata_domain and metadata_subdomain:
         primary = taxonomy.normalize_domain(metadata_domain, candidates)
+        subdomain = metadata_subdomain
+    if not primary:
+        primary = taxonomy.normalize_domain(
+            _s(obj.get("primary_domain") or obj.get("domain")), candidates
+        )
     if not primary:
         primary = taxonomy.classify_text_heuristic(fallback_text, candidates)
-    subdomain = ""
     if (
-        primary
+        not subdomain
+        and primary
         and metadata_subdomain
+        and metadata_domain
         and metadata_domain.lower() == primary.lower()
     ):
         subdomain = metadata_subdomain

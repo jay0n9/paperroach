@@ -110,6 +110,50 @@ class KnowledgeTests(unittest.TestCase):
             self.assertIn("2 start marker(s) and 2 end marker(s)", stdout.getvalue())
             self.assertEqual(note.read_text(encoding="utf-8"), original)
 
+    def test_append_source_link_adds_source_when_body_mentions_paper(self):
+        with tempfile.TemporaryDirectory() as td:
+            note = Path(td) / "Concept.md"
+            note.write_text(
+                "\n".join(
+                    [
+                        "# Concept",
+                        "",
+                        "The body mentions [[Paper One]] as context.",
+                        "",
+                        "## Source",
+                        "- From: [[Other Paper]]",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            changed = knowledge._append_source_link(note, "Paper One")
+
+            self.assertTrue(changed)
+            text = note.read_text(encoding="utf-8")
+            self.assertIn("The body mentions [[Paper One]] as context.", text)
+            self.assertIn("- From: [[Paper One]]", text)
+
+    def test_append_source_link_is_idempotent_for_source_alias(self):
+        with tempfile.TemporaryDirectory() as td:
+            note = Path(td) / "Concept.md"
+            original = "\n".join(
+                [
+                    "# Concept",
+                    "",
+                    "## Source",
+                    "- From: [[Paper One|alias]]",
+                    "",
+                ]
+            )
+            note.write_text(original, encoding="utf-8")
+
+            changed = knowledge._append_source_link(note, "Paper One")
+
+            self.assertFalse(changed)
+            self.assertEqual(note.read_text(encoding="utf-8"), original)
+
     def test_write_related_concepts_skips_reversed_markers(self):
         with tempfile.TemporaryDirectory() as td:
             note = Path(td) / "Concept.md"

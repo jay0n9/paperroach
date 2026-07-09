@@ -377,8 +377,8 @@ def _append_source_link(path: Path, paper_link: str) -> bool:
     hand-written '## Sources' heading as '## Source' and corrupt it.
     """
     text = _read_text_tolerant(path)
-    if f"[[{paper_link}]]" in text:
-        return False  # already linked — idempotent
+    if paper_link in _sources_from_text(text):
+        return False  # already linked in Source; idempotent
     bullet = f"- From: [[{paper_link}]]"
     m = _SOURCE_HEADING_RE.search(text)
     if m:

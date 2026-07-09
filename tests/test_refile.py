@@ -15,7 +15,11 @@ def _refile_quietly(*args, **kwargs):
 
 
 def _write_generated_note(
-    path: Path, *, tags: list[str], body: str = "A compact test note."
+    path: Path,
+    *,
+    tags: list[str],
+    body: str = "A compact test note.",
+    extra_frontmatter: list[str] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tag_lines = "\n".join(f"- {tag}" for tag in tags)
@@ -30,6 +34,7 @@ def _write_generated_note(
                 "Authors: Test Author",
                 "Year: 2024",
                 "Source: https://example.org/paper",
+                *(extra_frontmatter or []),
                 "tags:",
                 tag_lines,
                 "kb-generated: true",
@@ -102,6 +107,26 @@ class RefilePlanTests(unittest.TestCase):
                     "This paragraph mentions multiple testing, false discovery rate, "
                     "statistical inference, correlations, and meta-analysis."
                 ),
+            )
+            plan = Path(td) / "refile-plan.md"
+
+            result = _refile_quietly(cfg, apply=False, plan_out=plan)
+
+            self.assertEqual(result["planned"], 1)
+            text = plan.read_text(encoding="utf-8")
+            self.assertIn("Computer Science/Computer Graphics/Test Paper (2024).md", text)
+            self.assertIn("| metadata |", text)
+
+    def test_metadata_subdomain_beats_existing_domain_frontmatter(self):
+        with tempfile.TemporaryDirectory() as td:
+            vault = Path(td) / "vault"
+            cfg = Config(vault_path=vault, references_dir="References", kb_dir=".kb")
+            note = cfg.references_path / "Test Paper (2024).md"
+            _write_generated_note(
+                note,
+                tags=["paper", "computer-graphics", "neural-network"],
+                extra_frontmatter=["Domain: HCI"],
+                body="The body talks about user studies and qualitative interviews.",
             )
             plan = Path(td) / "refile-plan.md"
 

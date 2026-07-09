@@ -32,6 +32,31 @@ class LLMClassificationTests(unittest.TestCase):
         self.assertEqual(cls.primary_domain, "HCI")
         self.assertEqual(cls.subdomain, "Health & Wellbeing")
 
+    def test_metadata_subdomain_overrides_model_primary_domain(self):
+        metadata = PaperMetadata(
+            title="Face Model Registration",
+            summary="computer graphics reconstruction with 3d morphable face models",
+            methods="registration and expression analysis",
+            key_contributions=["face model alignment for animation"],
+            tags=["paper", "computer-graphics", "neural-network"],
+            venue="ACM Transactions on Graphics",
+            venue_type="journalArticle",
+        )
+        metadata_text = llm.classification_metadata_text(metadata)
+
+        cls = llm._coerce_classification(
+            {"primary_domain": "HCI", "subdomain": "Health & Wellbeing"},
+            ["Computer Science", "Generative AI", "HCI", "Statistics"],
+            fallback_text=(
+                "The body mentions users, interviews, participant feedback, "
+                "therapy, diffusion models, and evaluation."
+            ),
+            metadata_text=metadata_text,
+        )
+
+        self.assertEqual(cls.primary_domain, "Computer Science")
+        self.assertEqual(cls.subdomain, "Computer Graphics")
+
     def test_metadata_classification_text_includes_structured_fields(self):
         metadata = PaperMetadata(
             title="Tagged Paper",

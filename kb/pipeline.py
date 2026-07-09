@@ -652,26 +652,11 @@ def _paper_domain_for_note(
 def _paper_filing_for_note(
     note: Path, domain_of: dict[str, str], candidates: list[str]
 ) -> dict[str, str]:
-    """Domain for an existing paper note, preferring explicit classification."""
+    """Domain for an existing paper note, preferring explicit subdomain then metadata."""
     fm = obsidian._read_frontmatter(note)
     metadata_text = _note_metadata_text(note, fm)
     explicit_subdomain = _frontmatter_subdomain(fm, "")
     metadata_domain, metadata_subdomain = taxonomy.classify_subdomain_any(metadata_text)
-    for key in ("Domain", "primary_domain", "Primary Domain"):
-        value = fm.get(key)
-        if isinstance(value, str) and value.strip():
-            domain = taxonomy.normalize_domain(value, candidates)
-            subdomain = _frontmatter_subdomain(fm, domain)
-            if not subdomain:
-                subdomain = taxonomy.classify_subdomain_heuristic(metadata_text, domain)
-            if not subdomain:
-                subdomain = taxonomy.classify_subdomain_heuristic(
-                    _note_body_classification_text(note), domain
-                )
-                source = "body" if subdomain else "frontmatter-domain"
-            else:
-                source = "frontmatter-subdomain" if _frontmatter_subdomain(fm, domain) else "metadata"
-            return {"domain": domain, "subdomain": subdomain, "source": source}
     if explicit_subdomain:
         domain = taxonomy.domain_for_subdomain(explicit_subdomain)
         if domain:
@@ -686,6 +671,25 @@ def _paper_filing_for_note(
             "subdomain": metadata_subdomain,
             "source": "metadata",
         }
+    for key in ("Domain", "primary_domain", "Primary Domain"):
+        value = fm.get(key)
+        if isinstance(value, str) and value.strip():
+            domain = taxonomy.normalize_domain(value, candidates)
+            subdomain = _frontmatter_subdomain(fm, domain)
+            if not subdomain:
+                subdomain = taxonomy.classify_subdomain_heuristic(metadata_text, domain)
+            if not subdomain:
+                subdomain = taxonomy.classify_subdomain_heuristic(
+                    _note_body_classification_text(note), domain
+                )
+                source = "body" if subdomain else "frontmatter-domain"
+            else:
+                source = (
+                    "frontmatter-subdomain"
+                    if _frontmatter_subdomain(fm, domain)
+                    else "metadata"
+                )
+            return {"domain": domain, "subdomain": subdomain, "source": source}
     text = obsidian._read_text_tolerant(note)
     guessed = taxonomy.classify_text_heuristic(text[:12000], candidates)
     if guessed:
