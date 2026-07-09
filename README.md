@@ -188,6 +188,10 @@ The classifier combines:
 - Frontmatter persistence through `Domain`, `Secondary Domains`,
   `Subdomain`, `Contribution Type`, and `Methods`.
 
+Subdomain filing is metadata-first: explicit `Subdomain` frontmatter wins, then
+metadata hints such as tags, venue, DOI/source URL, and title are used before
+the generated note body is inspected.
+
 ## Zotero Watcher
 
 ```bash

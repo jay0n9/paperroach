@@ -117,8 +117,11 @@ DOMAIN_RULES = [
             "hypothesis test",
             "p-value",
             "confidence interval",
+            "multiple testing",
             "equivalence test",
             "false discovery rate",
+            "t test",
+            "correlation",
             "rank test",
             "rank-based",
             "test statistics",
@@ -240,7 +243,8 @@ SUBDOMAIN_RULES = {
             "positive_cues": [
                 "operating system",
                 "distributed system",
-                "network",
+                "computer network",
+                "network protocol",
                 "runtime",
                 "scheduler",
                 "throughput",
@@ -263,7 +267,8 @@ SUBDOMAIN_RULES = {
             "positive_cues": [
                 "software engineering",
                 "program analysis",
-                "testing",
+                "software testing",
+                "unit testing",
                 "debugging",
                 "code generation",
                 "developer tools",
@@ -373,7 +378,17 @@ SUBDOMAIN_RULES = {
     "Statistics": [
         {
             "name": "Statistical Inference",
-            "positive_cues": ["hypothesis test", "confidence interval", "p-value"],
+            "positive_cues": [
+                "hypothesis test",
+                "confidence interval",
+                "p-value",
+                "multiple testing",
+                "false discovery rate",
+                "equivalence test",
+                "t test",
+                "correlation",
+                "meta-analysis",
+            ],
         },
         {
             "name": "Regression & Causal Analysis",
@@ -412,6 +427,18 @@ def subdomain_names(domain: str | None = None) -> list[str]:
     for rules in SUBDOMAIN_RULES.values():
         out.extend(d["name"] for d in rules)
     return out
+
+
+def domain_for_subdomain(name: str) -> str:
+    """Return the parent domain for a known subdomain name."""
+    raw = re.sub(r"\s+", " ", str(name or "")).strip().lower()
+    if not raw:
+        return ""
+    for domain, rules in SUBDOMAIN_RULES.items():
+        for rule in rules:
+            if rule["name"].lower() == raw:
+                return domain
+    return ""
 
 
 def prompt_block(extra_domains: list[str] | None = None) -> str:
@@ -528,23 +555,46 @@ def classify_subdomain_heuristic(
     hay = " ".join(str(text or "").lower().split())
     if not hay or not domain:
         return ""
+    best, score = _best_subdomain(hay, domain)
+    if score < 2:
+        return ""
+    return normalize_subdomain(best, domain, candidates)
+
+
+def classify_subdomain_any(text: str) -> tuple[str, str]:
+    """Best metadata-derived (domain, subdomain) pair across all domains."""
+    hay = " ".join(str(text or "").lower().split())
+    if not hay:
+        return "", ""
+    best_domain = ""
+    best_subdomain = ""
+    best_score = 0
+    for domain in SUBDOMAIN_RULES:
+        subdomain, score = _best_subdomain(hay, domain)
+        if score > best_score:
+            best_domain, best_subdomain, best_score = domain, subdomain, score
+    if best_score < 2:
+        return "", ""
+    return best_domain, best_subdomain
+
+
+def _best_subdomain(hay: str, domain: str) -> tuple[str, int]:
     rules = SUBDOMAIN_RULES.get(domain, [])
     if not rules:
-        return ""
+        return "", 0
     scores: dict[str, int] = {}
     head = hay[:2000]
     for rule in rules:
         score = 0
+        if _cue_present(head, rule["name"].lower()):
+            score += 20
         for cue in rule["positive_cues"]:
             if _cue_present(head, cue):
                 score += 5
             elif _cue_present(hay, cue):
                 score += 2
         scores[rule["name"]] = score
-    best, score = max(scores.items(), key=lambda kv: (kv[1], kv[0]))
-    if score < 2:
-        return ""
-    return normalize_subdomain(best, domain, candidates)
+    return max(scores.items(), key=lambda kv: (kv[1], kv[0]))
 
 
 def _cue_present(text: str, cue: str) -> bool:
@@ -552,7 +602,8 @@ def _cue_present(text: str, cue: str) -> bool:
     cue = str(cue or "").strip().lower()
     if not cue:
         return False
-    pattern = re.escape(cue)
-    pattern = pattern.replace(r"\ ", r"[\s\-]+")
-    pattern = pattern.replace(r"\-", r"[\s\-]+")
+    parts = [re.escape(part) for part in re.split(r"[\s\-]+", cue) if part]
+    if not parts:
+        return False
+    pattern = r"[\s\-]+".join(parts)
     return re.search(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", text) is not None

@@ -338,7 +338,16 @@ def classify_paper(
     parts.append("\nReturn the classification JSON now.")
     obj = client.generate_json(system, "\n\n".join(parts))
     fallback_text = "\n".join(parts)
-    return _coerce_classification(obj, candidates, fallback_text)
+    metadata_text = "\n".join(
+        [
+            metadata.title,
+            " ".join(metadata.tags),
+            metadata.venue,
+            metadata.venue_type,
+            metadata.doi,
+        ]
+    )
+    return _coerce_classification(obj, candidates, fallback_text, metadata_text)
 
 
 def _s(value) -> str:
@@ -346,16 +355,29 @@ def _s(value) -> str:
 
 
 def _coerce_classification(
-    obj: dict, candidates: list[str], fallback_text: str
+    obj: dict, candidates: list[str], fallback_text: str, metadata_text: str = ""
 ) -> PaperClassification:
+    metadata_domain, metadata_subdomain = taxonomy.classify_subdomain_any(metadata_text)
     primary = taxonomy.normalize_domain(
         _s(obj.get("primary_domain") or obj.get("domain")), candidates
     )
+    if not primary and metadata_domain:
+        primary = taxonomy.normalize_domain(metadata_domain, candidates)
     if not primary:
         primary = taxonomy.classify_text_heuristic(fallback_text, candidates)
-    subdomain = taxonomy.normalize_subdomain(
-        _s(obj.get("subdomain") or obj.get("primary_subdomain")), primary
-    )
+    subdomain = ""
+    if (
+        primary
+        and metadata_subdomain
+        and metadata_domain.lower() == primary.lower()
+    ):
+        subdomain = metadata_subdomain
+    if not subdomain and primary and metadata_text:
+        subdomain = taxonomy.classify_subdomain_heuristic(metadata_text, primary)
+    if not subdomain:
+        subdomain = taxonomy.normalize_subdomain(
+            _s(obj.get("subdomain") or obj.get("primary_subdomain")), primary
+        )
     if not subdomain and primary:
         subdomain = taxonomy.classify_subdomain_heuristic(fallback_text, primary)
 

@@ -603,51 +603,77 @@ def _paper_domain_for_note(
 ) -> tuple[str, str]:
     """Domain for an existing paper note, preferring explicit classification."""
     fm = obsidian._read_frontmatter(note)
-    subdomain = ""
+    metadata_text = _note_metadata_text(note, fm)
+    explicit_subdomain = _frontmatter_subdomain(fm, "")
+    metadata_domain, metadata_subdomain = taxonomy.classify_subdomain_any(metadata_text)
     for key in ("Domain", "primary_domain", "Primary Domain"):
         value = fm.get(key)
         if isinstance(value, str) and value.strip():
             domain = taxonomy.normalize_domain(value, candidates)
-            for sub_key in ("Subdomain", "subdomain", "Primary Subdomain"):
-                sub_value = fm.get(sub_key)
-                if isinstance(sub_value, str) and sub_value.strip():
-                    subdomain = taxonomy.normalize_subdomain(sub_value, domain)
-                    break
+            subdomain = _frontmatter_subdomain(fm, domain)
             if not subdomain:
-                text = _note_classification_text(note, fm)
-                subdomain = taxonomy.classify_subdomain_heuristic(text, domain)
+                subdomain = taxonomy.classify_subdomain_heuristic(metadata_text, domain)
+            if not subdomain:
+                subdomain = taxonomy.classify_subdomain_heuristic(
+                    _note_body_classification_text(note), domain
+                )
             return domain, subdomain
+    if explicit_subdomain:
+        domain = taxonomy.domain_for_subdomain(explicit_subdomain)
+        if domain:
+            return taxonomy.normalize_domain(domain, candidates), explicit_subdomain
+    if metadata_domain and metadata_subdomain:
+        return taxonomy.normalize_domain(metadata_domain, candidates), metadata_subdomain
     text = obsidian._read_text_tolerant(note)
     guessed = taxonomy.classify_text_heuristic(text[:12000], candidates)
     if guessed:
-        subdomain = taxonomy.classify_subdomain_heuristic(
-            _note_classification_text(note, fm, text), guessed
-        )
+        subdomain = taxonomy.classify_subdomain_heuristic(metadata_text, guessed)
+        if not subdomain:
+            subdomain = taxonomy.classify_subdomain_heuristic(
+                _note_body_classification_text(note, text), guessed
+            )
         return guessed, subdomain
     voted = _subject_vote(note, domain_of)
     subdomain = (
-        taxonomy.classify_subdomain_heuristic(_note_classification_text(note, fm, text), voted)
+        taxonomy.classify_subdomain_heuristic(metadata_text, voted)
+        or taxonomy.classify_subdomain_heuristic(_note_body_classification_text(note, text), voted)
         if voted
         else ""
     )
     return voted, subdomain
 
 
-def _note_classification_text(note: Path, fm: dict, text: str | None = None) -> str:
-    """Compact, classification-oriented text for existing generated notes.
+def _frontmatter_subdomain(fm: dict, domain: str = "") -> str:
+    for key in ("Subdomain", "subdomain", "Primary Subdomain"):
+        value = fm.get(key)
+        if isinstance(value, str) and value.strip():
+            return taxonomy.normalize_subdomain(value, domain)
+    return ""
 
-    Full generated notes contain broad words like "algorithm" and "training"
-    that can overpower the actual filing topic. Prefer title, tags, stored
-    metadata, and the first explanatory sections.
-    """
-    text = text if text is not None else obsidian._read_text_tolerant(note)
+
+def _note_metadata_text(note: Path, fm: dict) -> str:
+    """Metadata-only signal for filing. This has priority over body text."""
     pieces = [
         note.stem,
         str(fm.get("Domain") or ""),
         str(fm.get("Subdomain") or ""),
         " ".join(str(t) for t in (fm.get("tags") or [])),
         str(fm.get("Venue") or ""),
+        str(fm.get("Venue Type") or ""),
+        str(fm.get("DOI") or ""),
+        str(fm.get("Source") or ""),
     ]
+    return "\n\n".join(p for p in pieces if p)
+
+
+def _note_body_classification_text(note: Path, text: str | None = None) -> str:
+    """Compact body signal for existing generated notes.
+
+    Full generated notes contain broad words like "algorithm" and "training"
+    that can overpower the actual filing topic. Use it only after metadata.
+    """
+    text = text if text is not None else obsidian._read_text_tolerant(note)
+    pieces = []
     for heading in (
         "TL;DR",
         "Problem & Motivation",

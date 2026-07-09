@@ -195,6 +195,10 @@ Steps:
    it uses AI-assisted environment generation. A core rendering or geometry
    paper can be filed under `Computer Science / Computer Graphics`.
 
+   Subdomain priority is metadata-first: explicit frontmatter is used first,
+   then metadata hints such as tags, venue, DOI/source URL, and title, and only
+   then compact body sections such as TL;DR, Approach, and Concepts.
+
 5. Distill concept details:
    - explanation
    - why it matters
