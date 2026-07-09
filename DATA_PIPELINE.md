@@ -49,7 +49,7 @@ Generated notes are skipped on re-ingest if their frontmatter contains
 | Tag registry | `<vault>/<tags_dir>/Tag Registry.md` | `kb/tags.py` |
 | Vector store | `<kb_path>` | `kb/store.py` |
 | Content hash ledger | `<kb_path>/content_hashes.json` | `kb/pipeline.py` |
-| Watcher lock | `<kb_path>/watch.lock` | `kb/pipeline.py` |
+| Pipeline write lock | `<kb_path>/pipeline.lock` | `kb/pipeline.py`, `kb/cli.py` |
 | Watcher log | User-managed terminal or service log | Local watcher wrapper |
 
 By default, `kb.toml` points the store at:
@@ -485,7 +485,7 @@ Behavior:
 - Polls `storage/*/*.pdf`.
 - Skips files already represented by `doc_id`.
 - Retries failed PDFs up to 3 attempts.
-- Uses `watch.lock` heartbeat to avoid two watcher processes racing.
+- Uses a shared `pipeline.lock` heartbeat to avoid watcher/manual write races.
 
 Optional local startup wrapper:
 
@@ -654,16 +654,14 @@ batch. Important boundaries:
 
 ## 14. Recommended Next Improvements
 
-1. Add a global pipeline lock for manual build/maintenance commands, not only
-   `paperroach watch`.
-2. Add tests for pure functions:
+1. Add tests for pure functions:
    - filename sanitization
    - frontmatter splitting
    - chunking
    - content dedupe
    - managed block replacement
-3. Align `.gitignore` with actual generated artifacts:
+2. Align `.gitignore` with actual generated artifacts:
    - `.kbstore/`
    - `kb-watch.log*`
    - `kb_backups/`
-5. Document the required Python environment for manual commands.
+3. Document the required Python environment for manual commands.

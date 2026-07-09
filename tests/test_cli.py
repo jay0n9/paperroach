@@ -10,10 +10,15 @@ from unittest.mock import patch
 from kb import __version__
 from kb import cli
 from kb.cli import build_parser, main
-from kb.config import load_config
+from kb.config import Config, load_config
 
 
 class CLITests(unittest.TestCase):
+    def _temp_config(self, root: Path) -> Config:
+        vault = root / "vault"
+        vault.mkdir()
+        return Config(vault_path=vault)
+
     def test_version_uses_public_project_name(self):
         stdout = StringIO()
 
@@ -82,9 +87,14 @@ class CLITests(unittest.TestCase):
             self.assertNotIn("kb: warning", warning)
 
     def test_build_command_returns_nonzero_when_nothing_succeeds(self):
-        with patch.object(cli, "_config_from_args", return_value=object()):
-            with patch("kb.pipeline.build", return_value={"processed": 0, "succeeded": []}):
-                code = main(["build", "missing.pdf"])
+        with tempfile.TemporaryDirectory() as td:
+            config = self._temp_config(Path(td))
+            with patch.object(cli, "_config_from_args", return_value=config):
+                with patch(
+                    "kb.pipeline.build",
+                    return_value={"processed": 0, "succeeded": []},
+                ):
+                    code = main(["build", "missing.pdf"])
 
         self.assertEqual(code, 1)
 
@@ -96,11 +106,31 @@ class CLITests(unittest.TestCase):
 
         for result in cases:
             with self.subTest(result=result):
-                with patch.object(cli, "_config_from_args", return_value=object()):
-                    with patch("kb.pipeline.build", return_value=result):
-                        code = main(["build", "paper.pdf"])
+                with tempfile.TemporaryDirectory() as td:
+                    config = self._temp_config(Path(td))
+                    with patch.object(cli, "_config_from_args", return_value=config):
+                        with patch("kb.pipeline.build", return_value=result):
+                            code = main(["build", "paper.pdf"])
 
                 self.assertEqual(code, 0)
+
+    def test_build_command_returns_locked_when_pipeline_lock_is_fresh(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = self._temp_config(Path(td))
+            config.kb_path.mkdir(parents=True)
+            (config.kb_path / "pipeline.lock").write_text(
+                '{"owner": "other", "pid": 123, "token": "abc"}',
+                encoding="utf-8",
+            )
+            stderr = StringIO()
+            with patch.object(cli, "_config_from_args", return_value=config):
+                with patch("kb.pipeline.build") as build_mock:
+                    with redirect_stderr(stderr):
+                        code = main(["build", "paper.pdf"])
+
+            self.assertEqual(code, 3)
+            build_mock.assert_not_called()
+            self.assertIn("Another PaperRoach write command", stderr.getvalue())
 
 
 if __name__ == "__main__":

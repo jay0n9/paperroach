@@ -61,6 +61,122 @@ def _log(msg: str) -> None:
         print(safe, flush=True)
 
 
+DEFAULT_PIPELINE_LOCK_STALE_SECONDS = 12 * 60 * 60
+
+
+class PipelineLockError(RuntimeError):
+    """Raised when a fresh PaperRoach write lock already exists."""
+
+
+class PipelineLock:
+    """Atomic file lock for commands that write notes or the vector store."""
+
+    def __init__(
+        self,
+        config: Config,
+        owner: str,
+        stale_seconds: float = DEFAULT_PIPELINE_LOCK_STALE_SECONDS,
+    ) -> None:
+        self.path = config.kb_path / "pipeline.lock"
+        self.owner = owner
+        self.stale_seconds = stale_seconds
+        self.token = f"{os.getpid()}:{time.time():.6f}:{owner}"
+        self._acquired = False
+
+    def __enter__(self) -> "PipelineLock":
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._acquire()
+        self._acquired = True
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.release()
+
+    def heartbeat(self) -> None:
+        """Refresh the lock timestamp while long-running daemons are alive."""
+        if not self._acquired or not self._owns_lock():
+            return
+        self.path.write_text(self._payload(), encoding="utf-8")
+
+    def release(self) -> None:
+        if not self._acquired:
+            return
+        self._acquired = False
+        if not self._owns_lock():
+            return
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
+
+    def _acquire(self) -> None:
+        try:
+            self._write_new_lock()
+            return
+        except FileExistsError:
+            pass
+
+        if not self._is_stale():
+            raise PipelineLockError(self._busy_message())
+
+        try:
+            self.path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise PipelineLockError(self._busy_message()) from exc
+
+        try:
+            self._write_new_lock()
+        except FileExistsError as exc:
+            raise PipelineLockError(self._busy_message()) from exc
+
+    def _write_new_lock(self) -> None:
+        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(self._payload())
+
+    def _payload(self) -> str:
+        return json.dumps(
+            {
+                "owner": self.owner,
+                "pid": os.getpid(),
+                "token": self.token,
+                "updated_at": time.time(),
+            },
+            indent=1,
+        )
+
+    def _is_stale(self) -> bool:
+        try:
+            return (time.time() - self.path.stat().st_mtime) >= self.stale_seconds
+        except OSError:
+            return False
+
+    def _owns_lock(self) -> bool:
+        return self._lock_details().get("token") == self.token
+
+    def _lock_details(self) -> dict[str, object]:
+        try:
+            text = self.path.read_text(encoding="utf-8")
+            data = json.loads(text)
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+        return {}
+
+    def _busy_message(self) -> str:
+        details = self._lock_details()
+        owner = details.get("owner") or "unknown"
+        pid = details.get("pid") or "unknown"
+        return (
+            "Another PaperRoach write command appears to be running "
+            f"(owner={owner}, pid={pid}, lock={self.path}). "
+            "Stop that process first, or delete the lock file if it is stale."
+        )
+
+
 # --------------------------------------------------------------------------- #
 #  Input discovery
 # --------------------------------------------------------------------------- #
@@ -1302,83 +1418,65 @@ def watch(config: Config, scan_only: bool = False) -> dict:
         return {"processed": 0}
     config.ensure_dirs()
 
-    # Single-instance guard: two watchers would build the same PDFs at once
-    # and race on the store and note files. The lock is heartbeat-based so a
-    # crashed watcher's stale lock is taken over automatically.
-    lock = config.kb_path / "watch.lock"
+    # Shared writer guard: watchers and manual maintenance commands all touch
+    # the same notes/store, so they coordinate through one lock file.
     fresh_window = max(60.0, config.watch_interval * 5.0)
     try:
-        if lock.exists() and (time.time() - lock.stat().st_mtime) < fresh_window:
-            _log(
-                "Another `paperroach watch` appears to be running (watch.lock is fresh). "
-                "Stop it first, or delete the lock file if it is stale: "
-                f"{lock}"
-            )
-            return {"processed": 0}
-    except OSError:
-        pass
-    lock.write_text(str(os.getpid()), encoding="utf-8")
+        with PipelineLock(config, "watch", stale_seconds=fresh_window) as lock:
+            _MAX_ATTEMPTS = 3
+            seen = {r["doc_id"] for r in KBStore(config).all_docs(columns=["doc_id"])}
+            attempts: dict[str, int] = {}  # doc_id -> failed build attempts
+            storage = data_dir / "storage"
+            _log(f"Zotero data dir : {data_dir}")
+            _log(f"Watching        : {storage}")
+            if not scan_only:
+                _log(f"Polling every {config.watch_interval}s. Press Ctrl+C to stop.")
 
-    _MAX_ATTEMPTS = 3
-    seen = {r["doc_id"] for r in KBStore(config).all_docs(columns=["doc_id"])}
-    attempts: dict[str, int] = {}  # doc_id -> failed build attempts
-    storage = data_dir / "storage"
-    _log(f"Zotero data dir : {data_dir}")
-    _log(f"Watching        : {storage}")
-    if not scan_only:
-        _log(f"Polling every {config.watch_interval}s. Press Ctrl+C to stop.")
-
-    total = 0
-    try:
-        while True:
-            new = []
-            for pdf in zotero.storage_pdfs(data_dir):
-                did = doc_id_for(pdf)
-                if did in seen:
-                    continue
-                if attempts.get(did, 0) >= _MAX_ATTEMPTS:
-                    continue  # kept failing; don't burn the LLM on it every cycle
-                if not _stable(pdf):
-                    continue  # still downloading; pick it up next cycle
-                new.append(pdf)
-            if new:
-                _log(f"\nDetected {len(new)} new PDF(s) in Zotero:")
-                for p in new:
-                    _log(f"  + {p.name}")
-                try:
-                    result = build(new, config)
-                except Exception as exc:
-                    # The watcher daemon must survive anything a build throws.
-                    _log(f"  ! build failed: {exc}")
-                    result = {"succeeded": []}
-                # Only successfully stored documents are done; a failed PDF gets
-                # retried (up to _MAX_ATTEMPTS) instead of being skipped forever.
-                # Content-duplicates count as done too.
-                succeeded = set(result.get("succeeded") or [])
-                seen |= succeeded | set(result.get("skipped_duplicates") or [])
-                for p in new:
-                    did = doc_id_for(p)
-                    if did not in seen:
-                        attempts[did] = attempts.get(did, 0) + 1
-                        if attempts[did] == _MAX_ATTEMPTS:
-                            _log(
-                                f"  ! giving up on {p.name} after "
-                                f"{_MAX_ATTEMPTS} attempts"
-                            )
-                total += len(succeeded)
-            if scan_only:
-                _log(f"Scan complete. {total} new document(s) processed.")
-                return {"processed": total}
-            try:
-                lock.touch()  # heartbeat for the single-instance guard
-            except OSError:
-                pass
-            time.sleep(config.watch_interval)
-    finally:
-        try:
-            lock.unlink()
-        except OSError:
-            pass
+            total = 0
+            while True:
+                new = []
+                for pdf in zotero.storage_pdfs(data_dir):
+                    did = doc_id_for(pdf)
+                    if did in seen:
+                        continue
+                    if attempts.get(did, 0) >= _MAX_ATTEMPTS:
+                        continue  # kept failing; don't burn the LLM on it every cycle
+                    if not _stable(pdf):
+                        continue  # still downloading; pick it up next cycle
+                    new.append(pdf)
+                if new:
+                    _log(f"\nDetected {len(new)} new PDF(s) in Zotero:")
+                    for p in new:
+                        _log(f"  + {p.name}")
+                    try:
+                        result = build(new, config)
+                    except Exception as exc:
+                        # The watcher daemon must survive anything a build throws.
+                        _log(f"  ! build failed: {exc}")
+                        result = {"succeeded": []}
+                    # Only successfully stored documents are done; a failed PDF gets
+                    # retried (up to _MAX_ATTEMPTS) instead of being skipped forever.
+                    # Content-duplicates count as done too.
+                    succeeded = set(result.get("succeeded") or [])
+                    seen |= succeeded | set(result.get("skipped_duplicates") or [])
+                    for p in new:
+                        did = doc_id_for(p)
+                        if did not in seen:
+                            attempts[did] = attempts.get(did, 0) + 1
+                            if attempts[did] == _MAX_ATTEMPTS:
+                                _log(
+                                    f"  ! giving up on {p.name} after "
+                                    f"{_MAX_ATTEMPTS} attempts"
+                                )
+                    total += len(succeeded)
+                if scan_only:
+                    _log(f"Scan complete. {total} new document(s) processed.")
+                    return {"processed": total}
+                lock.heartbeat()
+                time.sleep(config.watch_interval)
+    except PipelineLockError as exc:
+        _log(str(exc))
+        return {"processed": 0, "locked": True}
 
 
 def integrate_note_equations(path: Path, client: OllamaClient, config: Config) -> bool:

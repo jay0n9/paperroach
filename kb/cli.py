@@ -199,6 +199,17 @@ def _config_from_args(args: argparse.Namespace) -> Config:
     return load_config(overrides)
 
 
+def _run_locked(config: Config, owner: str, func) -> int:
+    from kb import pipeline
+
+    try:
+        with pipeline.PipelineLock(config, owner):
+            return func()
+    except pipeline.PipelineLockError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+
+
 # --------------------------------------------------------------------------- #
 #  Commands
 # --------------------------------------------------------------------------- #
@@ -247,10 +258,14 @@ def cmd_build(args: argparse.Namespace) -> int:
 
     config = _config_from_args(args)
     paths = [Path(p) for p in args.inputs]
-    result = pipeline.build(paths, config, recursive=args.recursive)
-    if result.get("succeeded") or result.get("skipped_duplicates"):
-        return 0
-    return 1
+
+    def run() -> int:
+        result = pipeline.build(paths, config, recursive=args.recursive)
+        if result.get("succeeded") or result.get("skipped_duplicates"):
+            return 0
+        return 1
+
+    return _run_locked(config, "build", run)
 
 
 def cmd_search(args: argparse.Namespace) -> int:
@@ -280,16 +295,20 @@ def cmd_watch(args: argparse.Namespace) -> int:
     from kb import pipeline
 
     config = _config_from_args(args)
-    pipeline.watch(config, scan_only=args.scan)
-    return 0
+    result = pipeline.watch(config, scan_only=args.scan)
+    return 3 if result.get("locked") else 0
 
 
 def cmd_relink(args: argparse.Namespace) -> int:
     from kb import pipeline
 
     config = _config_from_args(args)
-    pipeline.relink(config)
-    return 0
+
+    def run() -> int:
+        pipeline.relink(config)
+        return 0
+
+    return _run_locked(config, "relink", run)
 
 
 def cmd_wiki(args: argparse.Namespace) -> int:
@@ -297,11 +316,15 @@ def cmd_wiki(args: argparse.Namespace) -> int:
     from kb.ollama_client import OllamaClient
 
     config = _config_from_args(args)
-    client = OllamaClient(config)
-    print("Filling Knowledge Library concept notes wiki-style (LLM) …")
-    n = knowledge.fill_concept_notes(client, config)
-    print(f"\nEnriched {n} concept note(s) with wiki-style articles.")
-    return 0
+
+    def run() -> int:
+        client = OllamaClient(config)
+        print("Filling Knowledge Library concept notes wiki-style (LLM) …")
+        n = knowledge.fill_concept_notes(client, config)
+        print(f"\nEnriched {n} concept note(s) with wiki-style articles.")
+        return 0
+
+    return _run_locked(config, "wiki", run)
 
 
 def cmd_organize(args: argparse.Namespace) -> int:
@@ -311,45 +334,50 @@ def cmd_organize(args: argparse.Namespace) -> int:
 
     config = _config_from_args(args)
 
-    if args.aggressive:
-        print("Librarian mode — designing a coherent taxonomy (LLM) …")
-        moves, notes, tree = organize.plan_aggressive(config)
-    else:
-        print("Planning Knowledge Library organisation (LLM, conservative) …")
-        moves, notes = organize.plan(config)
-        tree = None
-    if not notes:
-        print("No Knowledge Library notes found.")
+    def run() -> int:
+        if args.aggressive:
+            print("Librarian mode — designing a coherent taxonomy (LLM) …")
+            moves, notes, tree = organize.plan_aggressive(config)
+        else:
+            print("Planning Knowledge Library organisation (LLM, conservative) …")
+            moves, notes = organize.plan(config)
+            tree = None
+        if not notes:
+            print("No Knowledge Library notes found.")
+            return 0
+
+        if tree is not None:
+            print(f"\nProposed taxonomy ({len(notes)} notes → {len(tree)} folders):")
+            for folder in sorted(tree):
+                print(f"  {folder}/  ({len(tree[folder])})")
+
+        print(f"\n{len(moves)} proposed move(s):")
+        by_target: dict[str, list] = defaultdict(list)
+        for path, current, target in moves:
+            by_target[target].append((path.stem, current))
+        for target in sorted(by_target):
+            print(f"\n  → {target}/")
+            for name, current in sorted(by_target[target]):
+                print(f"      {name}   (from {current or '(root)'})")
+
+        if not args.apply:
+            flag = " --aggressive" if args.aggressive else ""
+            print(
+                f"\nDry run — nothing changed. Re-run `paperroach organize{flag} --apply` to "
+                "move the notes and write per-folder MOC index notes."
+            )
+            return 0
+
+        backup = organize.backup_library(config)
+        print(f"\nBacked up Knowledge Library → {backup}")
+        moved = organize.apply_moves(moves, config)
+        mocs = organize.write_mocs(config)
+        print(f"Applied: moved {moved} note(s); wrote {mocs} MOC index note(s).")
         return 0
 
-    if tree is not None:
-        print(f"\nProposed taxonomy ({len(notes)} notes → {len(tree)} folders):")
-        for folder in sorted(tree):
-            print(f"  {folder}/  ({len(tree[folder])})")
-
-    print(f"\n{len(moves)} proposed move(s):")
-    by_target: dict[str, list] = defaultdict(list)
-    for path, current, target in moves:
-        by_target[target].append((path.stem, current))
-    for target in sorted(by_target):
-        print(f"\n  → {target}/")
-        for name, current in sorted(by_target[target]):
-            print(f"      {name}   (from {current or '(root)'})")
-
-    if not args.apply:
-        flag = " --aggressive" if args.aggressive else ""
-        print(
-            f"\nDry run — nothing changed. Re-run `paperroach organize{flag} --apply` to "
-            "move the notes and write per-folder MOC index notes."
-        )
-        return 0
-
-    backup = organize.backup_library(config)
-    print(f"\nBacked up Knowledge Library → {backup}")
-    moved = organize.apply_moves(moves, config)
-    mocs = organize.write_mocs(config)
-    print(f"Applied: moved {moved} note(s); wrote {mocs} MOC index note(s).")
-    return 0
+    if args.apply:
+        return _run_locked(config, "organize", run)
+    return run()
 
 
 def cmd_refile(args: argparse.Namespace) -> int:
@@ -357,45 +385,71 @@ def cmd_refile(args: argparse.Namespace) -> int:
 
     config = _config_from_args(args)
     plan_out = Path(args.plan_out) if args.plan_out else None
-    pipeline.refile_references(config, apply=args.apply, plan_out=plan_out)
-    return 0
+
+    def run() -> int:
+        pipeline.refile_references(config, apply=args.apply, plan_out=plan_out)
+        return 0
+
+    if args.apply:
+        return _run_locked(config, "refile", run)
+    return run()
 
 
 def cmd_retag(args: argparse.Namespace) -> int:
     from kb import pipeline
 
     config = _config_from_args(args)
-    if args.concepts:
-        pipeline.retag_concepts(config, apply=args.apply)
-    else:
-        pipeline.retag(config, apply=args.apply)
-    return 0
+
+    def run() -> int:
+        if args.concepts:
+            pipeline.retag_concepts(config, apply=args.apply)
+        else:
+            pipeline.retag(config, apply=args.apply)
+        return 0
+
+    if args.apply:
+        return _run_locked(config, "retag", run)
+    return run()
 
 
 def cmd_gc(args: argparse.Namespace) -> int:
     from kb import pipeline
 
     config = _config_from_args(args)
-    pipeline.gc(config, apply=args.apply)
-    return 0
+
+    def run() -> int:
+        pipeline.gc(config, apply=args.apply)
+        return 0
+
+    if args.apply:
+        return _run_locked(config, "gc", run)
+    return run()
 
 
 def cmd_fix_math(args: argparse.Namespace) -> int:
     from kb import pipeline
 
     config = _config_from_args(args)
-    n = pipeline.fix_math_in_all_notes(config)
-    print(f"Fixed inline math in {n} note(s).")
-    return 0
+
+    def run() -> int:
+        n = pipeline.fix_math_in_all_notes(config)
+        print(f"Fixed inline math in {n} note(s).")
+        return 0
+
+    return _run_locked(config, "fix-math", run)
 
 
 def cmd_integrate_equations(args: argparse.Namespace) -> int:
     from kb import pipeline
 
     config = _config_from_args(args)
-    n = pipeline.integrate_all_equations(config)
-    print(f"Integrated equations in {n} note(s).")
-    return 0
+
+    def run() -> int:
+        n = pipeline.integrate_all_equations(config)
+        print(f"Integrated equations in {n} note(s).")
+        return 0
+
+    return _run_locked(config, "integrate-equations", run)
 
 
 def cmd_stats(args: argparse.Namespace) -> int:

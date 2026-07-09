@@ -219,8 +219,8 @@ paperroach watch --zotero-dir "D:/Zotero"
 ```
 
 New PDFs under `storage/` are built once, keyed by path and content hash. Failed
-builds are retried on later cycles, and a `watch.lock` heartbeat prevents two
-watchers from racing on the same store.
+builds are retried on later cycles, and a shared `pipeline.lock` heartbeat
+prevents the watcher and manual write commands from racing on the same store.
 
 When a PDF is a Zotero attachment, PaperRoach reads bibliographic fields from
 `zotero.sqlite` in read-only mode: title, authors, year, tags, URL, venue,
