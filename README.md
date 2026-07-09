@@ -247,6 +247,17 @@ Useful maintenance commands:
 Commands that can move or rewrite files default to dry-run mode unless `--apply`
 is provided.
 
+## Development Checks
+
+```bash
+python -m unittest discover -s tests -v
+python -m compileall -q kb paperroach tests
+```
+
+The test suite includes taxonomy regression checks for metadata-first subdomain
+filing, including hyphenated tags such as `computer-graphics`,
+`computer-vision`, and `deep-learning`.
+
 ## PDF Parsing
 
 The default PDF backend is `pymupdf4llm` on CPU. Scanned PDFs can fall back to
