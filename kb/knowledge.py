@@ -35,6 +35,7 @@ _SOURCE_HEADING = "## Source"
 _RC_START = "%% kb-related-concepts-start %%"
 _RC_END = "%% kb-related-concepts-end %%"
 _RC_HEADING = "## Related Concepts"
+_MOC_SUFFIX = " MOC"
 
 
 def list_subjects(config: Config) -> list[str]:
@@ -208,7 +209,7 @@ def fill_concept_notes(client, config: Config) -> int:
     notes = [
         p
         for p in kl.rglob("*.md")
-        if p.is_file() and is_generated_note(p) and not p.stem.endswith(" MOC")
+        if p.is_file() and is_generated_note(p) and not _is_moc(p)
     ]
     filled = 0
     for i, p in enumerate(notes, 1):
@@ -315,7 +316,11 @@ def link_siblings(config: Config) -> int:
     kl = config.knowledge_library_path
     if not kl.exists():
         return 0
-    kb_notes = [p for p in kl.rglob("*.md") if p.is_file() and is_generated_note(p)]
+    kb_notes = [
+        p
+        for p in kl.rglob("*.md")
+        if p.is_file() and is_generated_note(p) and not _is_moc(p)
+    ]
     # One read per note; every helper below works on this text.
     texts: dict[Path, str] = {p: _read_text_tolerant(p) for p in kb_notes}
     paper_to_notes: dict[str, list[Path]] = {}
@@ -414,7 +419,7 @@ def process_concepts(touched_paths, client, store, config: Config) -> int:
     # MOC index files are link lists — embedding them makes them "related" to
     # everything, so they'd crowd real concepts out of every block.
     all_paths = [
-        p for p in kl.rglob("*.md") if p.is_file() and not p.stem.endswith(" MOC")
+        p for p in kl.rglob("*.md") if p.is_file() and not _is_moc(p)
     ]
     if not all_paths:
         return 0
@@ -478,21 +483,30 @@ def _write_related_concepts(path: Path, names: list[str]) -> bool:
     text = _read_text_tolerant(path)
     body = "\n".join(f"- [[{n}]]" for n in names) if names else "_No related concepts yet_"
     block = f"{_RC_START}\n{body}\n{_RC_END}"
-    has_start = _RC_START in text
-    has_end = _RC_END in text
-    if has_start and has_end:
-        updated = re.sub(
-            re.escape(_RC_START) + r".*?" + re.escape(_RC_END),
+    start_count = text.count(_RC_START)
+    end_count = text.count(_RC_END)
+    if start_count == 1 and end_count == 1:
+        pattern = re.escape(_RC_START) + r".*?" + re.escape(_RC_END)
+        updated, replacements = re.subn(
+            pattern,
             lambda _m: block,
             text,
             count=1,
             flags=re.DOTALL,
         )
-    elif has_start or has_end:
-        # One marker was deleted; appending would duplicate the block forever.
+        if replacements != 1:
+            print(
+                f"  ! related-concepts block in '{path.name}' has markers out "
+                "of order; skipping update.",
+                flush=True,
+            )
+            return False
+    elif start_count or end_count:
+        # A marker was edited or duplicated; partial updates would leave stale
+        # managed links in the graph.
         print(
-            f"  ! related-concepts block in '{path.name}' has a mismatched "
-            f"marker; skipping update.",
+            f"  ! related-concepts block in '{path.name}' has {start_count} "
+            f"start marker(s) and {end_count} end marker(s); skipping update.",
             flush=True,
         )
         return False
@@ -511,6 +525,10 @@ def _write_related_concepts(path: Path, names: list[str]) -> bool:
         path.write_text(updated, encoding="utf-8")
         return True
     return False
+
+
+def _is_moc(path: Path) -> bool:
+    return path.stem.endswith(_MOC_SUFFIX)
 
 
 def _safe_subject(subject: str, config: Config) -> str:
