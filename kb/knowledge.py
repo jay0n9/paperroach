@@ -419,7 +419,7 @@ def process_concepts(touched_paths, client, store, config: Config) -> int:
     if not all_paths:
         return 0
 
-    # Prune ghost rows: notes deleted by hand or moved by `kb organize`
+    # Prune ghost rows: notes deleted by hand or moved by `paperroach organize`
     # (concept_id is path-derived) would otherwise haunt Related Concepts
     # forever, recommending dead links and duplicate names.
     for row in store.all_concepts():

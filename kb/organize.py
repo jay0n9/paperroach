@@ -1,6 +1,6 @@
 """Self-organising Knowledge Library folders.
 
-`kb organize` reviews every note in the Knowledge Library, asks the LLM for the
+`paperroach organize` reviews every note in the Knowledge Library, asks the LLM for the
 best domain folder for each (conservatively — keep the current folder unless
 clearly wrong), and:
 

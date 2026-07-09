@@ -10,8 +10,15 @@ from kb.store import KBStore
 
 
 def _gc_quietly(*args, **kwargs):
-    with redirect_stdout(StringIO()):
-        return gc(*args, **kwargs)
+    result, _output = _capture_gc(*args, **kwargs)
+    return result
+
+
+def _capture_gc(*args, **kwargs):
+    stdout = StringIO()
+    with redirect_stdout(stdout):
+        result = gc(*args, **kwargs)
+    return result, stdout.getvalue()
 
 
 def _cfg(root: Path) -> Config:
@@ -87,9 +94,11 @@ class GCTests(unittest.TestCase):
             store.chunks.add([_chunk_row("aaaaaaaaaaaa", missing_note)])
             store.concepts.add([_concept_row("concept-a", missing_concept)])
 
-            result = _gc_quietly(cfg, apply=False)
+            result, output = _capture_gc(cfg, apply=False)
 
             self.assertEqual(result["removed"], 0)
+            self.assertIn("paperroach gc --apply", output)
+            self.assertNotIn("kb gc --apply", output)
             self.assertEqual(store.docs.count_rows(), 1)
             self.assertEqual(store.chunks.count_rows(), 1)
             self.assertEqual(store.concepts.count_rows(), 1)

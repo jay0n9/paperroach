@@ -193,14 +193,14 @@ class KBStore:
 
     # ── maintenance ─────────────────────────────────────────────────
     def update_note_path(self, doc_id: str, note_path: str) -> None:
-        """Point a document's rows at a moved note file (used by `kb refile`)."""
+        """Point a document's rows at a moved note file (used by `paperroach refile`)."""
         for table in (self.docs, self.chunks):
             table.update(
                 where=f"doc_id = '{doc_id}'", values={"note_path": note_path}
             )
 
     def delete_doc(self, doc_id: str) -> None:
-        """Remove a document and all its chunks (used by `kb gc`)."""
+        """Remove a document and all its chunks (used by `paperroach gc`)."""
         self._delete(self.chunks, doc_id)
         self._delete(self.docs, doc_id)
 

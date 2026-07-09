@@ -2,12 +2,13 @@ import os
 import tempfile
 import tomllib
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
 from kb import __version__
 from kb.cli import build_parser, main
+from kb.config import load_config
 
 
 class CLITests(unittest.TestCase):
@@ -43,6 +44,40 @@ class CLITests(unittest.TestCase):
             self.assertTrue((root / "kb.toml").exists())
             self.assertTrue((vault / "References").exists())
             self.assertIn("Wrote", stdout.getvalue())
+
+    def test_config_warning_uses_public_project_name(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = Path.cwd()
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            (root / "kb.toml").write_text(
+                "\n".join(
+                    [
+                        f'vault_path = "{vault.as_posix()}"',
+                        'unknown_option = "ignored"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            old_env = {
+                key: value for key, value in os.environ.items() if key.startswith("KB_")
+            }
+            for key in old_env:
+                os.environ.pop(key, None)
+            stderr = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stderr(stderr):
+                    load_config()
+            finally:
+                os.chdir(cwd)
+                os.environ.update(old_env)
+
+            warning = stderr.getvalue()
+            self.assertIn("paperroach: warning", warning)
+            self.assertNotIn("kb: warning", warning)
 
 
 if __name__ == "__main__":

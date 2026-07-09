@@ -417,7 +417,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     # Windows redirects default to the locale codepage (cp949 on Korean
     # systems), which cannot encode the pipeline's log glyphs (⇄, ·, →) —
-    # `kb build > log.txt` would crash mid-batch. Force UTF-8.
+    # `paperroach build > log.txt` would crash mid-batch. Force UTF-8.
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")

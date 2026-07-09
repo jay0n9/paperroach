@@ -953,7 +953,7 @@ def retag(config: Config, apply: bool = False) -> dict:
         _log(f"      {note_tags[p]}  →  {new}")
 
     if not apply:
-        _log("\nDry run — nothing written. Re-run `kb retag --apply` to commit.")
+        _log("\nDry run — nothing written. Re-run `paperroach retag --apply` to commit.")
         return {"updated": 0}
 
     reg_path = tags_mod.save_registry(config, registry)
@@ -1065,7 +1065,10 @@ def retag_concepts(config: Config, apply: bool = False) -> dict:
         _log(f"  {p.stem[:60]}")
         _log(f"      {cur}  →  {merged}")
     if not apply:
-        _log("\nDry run — nothing written. Re-run `kb retag --concepts --apply` to commit.")
+        _log(
+            "\nDry run — nothing written. "
+            "Re-run `paperroach retag --concepts --apply` to commit."
+        )
         return {"updated": 0}
 
     reg_path = tags_mod.save_registry(config, registry)
@@ -1134,7 +1137,7 @@ def gc(config: Config, apply: bool = False) -> dict:
         _log("Store is clean.")
         return {"removed": 0}
     if not apply:
-        _log("\nDry run — nothing deleted. Re-run `kb gc --apply` to clean up.")
+        _log("\nDry run — nothing deleted. Re-run `paperroach gc --apply` to clean up.")
         return {"removed": 0}
 
     removed = 0
@@ -1183,7 +1186,7 @@ def watch(config: Config, scan_only: bool = False) -> dict:
     try:
         if lock.exists() and (time.time() - lock.stat().st_mtime) < fresh_window:
             _log(
-                "Another `kb watch` appears to be running (watch.lock is fresh). "
+                "Another `paperroach watch` appears to be running (watch.lock is fresh). "
                 "Stop it first, or delete the lock file if it is stale: "
                 f"{lock}"
             )

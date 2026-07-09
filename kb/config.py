@@ -101,7 +101,7 @@ class Config:
     # ── Zotero integration ───────────────────────────────────────────
     zotero_dir: str = ""          # "" → auto-detect from the Zotero profile
     zotero_enrich: bool = True    # prefer Zotero DB metadata (title/authors/year/tags)
-    watch_interval: int = 15      # seconds between `kb watch` scans
+    watch_interval: int = 15      # seconds between `paperroach watch` scans
 
     # ── derived paths ────────────────────────────────────────────────
     @property
@@ -172,7 +172,7 @@ def load_config(overrides: dict | None = None) -> Config:
                 merged[k] = v
             else:
                 print(
-                    f"kb: warning: unknown key '{k}' in {cfg_file} (ignored)",
+                    f"paperroach: warning: unknown key '{k}' in {cfg_file} (ignored)",
                     file=sys.stderr,
                 )
 
