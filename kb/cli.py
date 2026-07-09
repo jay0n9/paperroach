@@ -33,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
             "(Obsidian, Zotero, Ollama, LanceDB)."
         ),
     )
-    parser.add_argument("--version", action="version", version=f"kb {__version__}")
+    parser.add_argument("--version", action="version", version=f"paperroach {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_init = sub.add_parser("init", help="Create kb.toml and vault folders")

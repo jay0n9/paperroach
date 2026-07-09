@@ -1,0 +1,49 @@
+import os
+import tempfile
+import tomllib
+import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
+
+from kb import __version__
+from kb.cli import build_parser, main
+
+
+class CLITests(unittest.TestCase):
+    def test_version_uses_public_project_name(self):
+        stdout = StringIO()
+
+        with self.assertRaises(SystemExit) as raised, redirect_stdout(stdout):
+            build_parser().parse_args(["--version"])
+
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(stdout.getvalue().strip(), f"paperroach {__version__}")
+
+    def test_pyproject_version_matches_runtime_version(self):
+        pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+
+        self.assertEqual(data["project"]["version"], __version__)
+
+    def test_init_command_writes_config_for_public_cli(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = Path.cwd()
+            root = Path(td)
+            vault = root / "vault"
+            stdout = StringIO()
+            try:
+                os.chdir(root)
+                with redirect_stdout(stdout):
+                    code = main(["init", "--vault", str(vault)])
+            finally:
+                os.chdir(cwd)
+
+            self.assertEqual(code, 0)
+            self.assertTrue((root / "kb.toml").exists())
+            self.assertTrue((vault / "References").exists())
+            self.assertIn("Wrote", stdout.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()
