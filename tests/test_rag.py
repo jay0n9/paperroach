@@ -61,6 +61,40 @@ class RAGFormattingTests(unittest.TestCase):
         self.assertIn("This snippet contains messy spacing", out)
         self.assertNotIn("\ncontains", out)
 
+    def test_missing_titles_fall_back_to_note_path_or_doc_id(self):
+        rows = [
+            {
+                "_distance": 0.1,
+                "title": "",
+                "note_path": "References/HCI/ASafePlace (2024).md",
+                "header": "TL;DR",
+                "text": "A short snippet.",
+            },
+            {
+                "title": "",
+                "note_path": r"C:\Vault\References\Graphics Paper.md",
+                "text": "Another snippet.",
+            },
+            {
+                "doc_id": "abc123abc123",
+                "title": "",
+                "note_path": "",
+                "text": "Doc id fallback.",
+            },
+        ]
+
+        formatted = rag.format_search_results(rows)
+        context = rag._build_context(rows)
+        sources = rag._dedupe_sources(rows)
+
+        self.assertIn("ASafePlace (2024) › TL;DR", formatted)
+        self.assertIn("Graphics Paper", formatted)
+        self.assertIn("Document abc123abc123", context)
+        self.assertEqual(
+            [s["title"] for s in sources],
+            ["ASafePlace (2024)", "Graphics Paper", "Document abc123abc123"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@ first, evicts the embedder, then loads the LLM.
 from __future__ import annotations
 
 import html
+from pathlib import PureWindowsPath
 
 from kb.config import Config
 from kb.ollama_client import OllamaClient
@@ -41,7 +42,7 @@ def format_search_results(rows: list[dict]) -> str:
     out = []
     for i, r in enumerate(rows, 1):
         score = 1.0 - float(r.get("_distance", 0.0))  # cosine similarity
-        title = r.get("title") or "(untitled)"
+        title = _source_title(r)
         header = r.get("header") or ""
         loc = f" › {header}" if header else ""
         snippet = _snippet(r.get("text", ""))
@@ -81,7 +82,7 @@ def ask(query: str, config: Config, k: int | None = None) -> dict:
 def _build_context(rows: list[dict]) -> str:
     blocks = []
     for i, r in enumerate(rows, 1):
-        title = _escape_context(r.get("title") or "(untitled)")
+        title = _escape_context(_source_title(r))
         header = _escape_context(r.get("header") or "")
         head = f"{title}" + (f" › {header}" if header else "")
         text = _escape_context(r.get("text", ""))
@@ -99,11 +100,22 @@ def _dedupe_sources(rows: list[dict]) -> list[dict]:
         seen.add(key)
         sources.append(
             {
-                "title": r.get("title") or "(untitled)",
+                "title": _source_title(r),
                 "note_path": r.get("note_path") or "",
             }
         )
     return sources
+
+
+def _source_title(row: dict) -> str:
+    title = str(row.get("title") or "").strip()
+    if title:
+        return title
+    note_path = str(row.get("note_path") or "").strip()
+    if note_path:
+        return PureWindowsPath(note_path.replace("/", "\\")).stem or "(untitled)"
+    doc_id = str(row.get("doc_id") or "").strip()
+    return f"Document {doc_id}" if doc_id else "(untitled)"
 
 
 def _snippet(text: str, limit: int = 220) -> str:
