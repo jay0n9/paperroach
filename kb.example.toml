@@ -1,0 +1,91 @@
+# ────────────────────────────────────────────────────────────────────
+#  PaperRoach pipeline configuration
+#  Copy to "kb.toml" (next to where you run `paperroach`) or pass --vault on CLI.
+#  CLI flags > environment variables (KB_*) > this file > built-in defaults.
+# ────────────────────────────────────────────────────────────────────
+
+# REQUIRED: absolute path to your Obsidian vault.
+vault_path = "C:/Users/you/Documents/MyVault"
+
+# Where generated paper (Source Material) notes are written (relative to vault).
+references_dir = "References"
+
+# File paper notes into <references_dir>/<Subject>/ (the domain the LLM picks
+# for the paper's concepts) instead of one flat folder. `paperroach refile` migrates
+# existing notes. Wikilinks resolve by basename, so moves are link-safe.
+references_by_subject = true
+
+# Where auto-distilled concept notes are filed (relative to vault). The LLM
+# picks an existing subfolder (domain) when one fits, else proposes a new one.
+knowledge_library_dir = "6 - Knowledge Library"
+
+# Where the LanceDB vector store lives (relative to the vault).
+kb_dir = ".kb"
+
+# ── Ollama ──────────────────────────────────────────────────────────
+ollama_host  = "http://localhost:11434"
+
+# PASS A — resident LLM (~7GB). thinking is disabled for speed/VRAM.
+llm_model    = "qwen3:8b"
+llm_think    = false
+llm_num_ctx  = 8192
+
+# PASS B — resident embedding model (~1.2GB, 1024-dim, multilingual ko/en).
+embed_model  = "bge-m3"
+embed_dim    = 1024
+
+# How long Ollama keeps a model resident between calls within a run.
+keep_alive   = "30m"
+
+# ── LLM metadata extraction ─────────────────────────────────────────
+# Only the first N characters (+ a header outline) are sent to the LLM,
+# so even long papers fit in the modest context window on 8GB VRAM.
+meta_input_chars     = 12000
+analysis_input_chars = 12000
+
+# ── Note generation ─────────────────────────────────────────────────
+# Language of the generated note body.
+note_language = "English"
+
+# Auto-create one Knowledge Library note per concept, bidirectionally linked
+# to the paper. Merge-safe: existing concept notes are never overwritten — a
+# `- From: [[paper]]` backlink is appended to their `## Source` instead.
+create_concept_notes = true
+
+# ── Header-aware chunking ───────────────────────────────────────────
+chunk_size    = 1200   # approx characters per chunk
+chunk_overlap = 150
+
+# ── Retrieval ───────────────────────────────────────────────────────
+related_top_k   = 5    # number of [[wikilinks]] per note
+rag_top_k       = 8    # chunks retrieved for `ask`
+answer_language = "English"
+
+# ── Behaviour ───────────────────────────────────────────────────────
+# PDF -> Markdown backend:
+#   "pymupdf4llm" (default, CPU) | "docling" | "ocr" (force OCR) |
+#   "nougat" (math-aware: extracts real equations as LaTeX; needs `pip install
+#            nougat-ocr` + a GPU, runs as an isolated subprocess).
+# Scanned PDFs (no text layer) auto-fall back to OCR regardless of this setting.
+ingester = "pymupdf4llm"
+
+# Rasterisation DPI used when OCR-ing a scanned PDF (rapidocr, CPU).
+ocr_dpi = 200
+
+# Inject/refresh an auto-managed "Related Papers" block inside your existing
+# Markdown notes when they are indexed. Generated reference notes are
+# always (re)written in full.
+rewrite_source_notes = true
+
+# ── Zotero integration ──────────────────────────────────────────────
+# `paperroach watch` auto-detects new PDFs dropped into Zotero and builds them.
+# Leave zotero_dir empty to auto-detect from your Zotero profile (honours a
+# custom dataDir, e.g. D:/Zotero). Set it explicitly to override.
+zotero_dir = ""
+
+# Prefer Zotero's bibliographic metadata (title/authors/year/tags) over the
+# LLM's extraction — far more reliable, especially for OCR'd scans.
+zotero_enrich = true
+
+# Seconds between `paperroach watch` scans of the Zotero storage folder.
+watch_interval = 15

@@ -1,0 +1,7 @@
+"""Run PaperRoach with ``python -m paperroach``."""
+
+from kb.cli import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

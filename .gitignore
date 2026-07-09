@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# Local config and environment (may contain absolute paths or tokens)
+kb.toml
+.env
+.env.*
+!.env.example
+
+# Generated local state
+.kb/
+.kbstore/
+kb_backups/
+*.log
+*.old
+
+# Local watcher / machine wrappers
+kb-watch.cmd
+kb-watch.vbs
+ollama-*.cmd
+ollama-*.vbs
+
+# Sample papers are often copyrighted; keep them local unless explicitly curated.
+sample/
+
+# OS
+Thumbs.db
+.DS_Store
