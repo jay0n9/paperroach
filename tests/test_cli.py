@@ -164,6 +164,28 @@ class CLITests(unittest.TestCase):
 
                 self.assertEqual(code, 0)
 
+    def test_enrich_figures_forwards_apply_and_limit(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = self._temp_config(Path(td))
+            with patch.object(cli, "_config_from_args", return_value=config):
+                with patch(
+                    "kb.pipeline.enrich_figures",
+                    return_value={"eligible": 2, "updated": 2, "blocked": 0},
+                ) as enrich:
+                    code = main(
+                        [
+                            "enrich-figures",
+                            "--apply",
+                            "--limit",
+                            "2",
+                            "--figure-mode",
+                            "extract",
+                        ]
+                    )
+
+            self.assertEqual(code, 0)
+            enrich.assert_called_once_with(config, apply=True, limit=2, force=False)
+
     def test_build_command_returns_locked_when_pipeline_lock_is_fresh(self):
         with tempfile.TemporaryDirectory() as td:
             config = self._temp_config(Path(td))

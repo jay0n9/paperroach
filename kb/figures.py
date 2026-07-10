@@ -40,6 +40,8 @@ _VISION_SYSTEM = (
     "short strings), importance (critical|supporting|contextual|decorative)."
 )
 _CAPTION_RE = re.compile(r"\b(?:fig(?:ure)?|table)\s*\d+\b", re.IGNORECASE)
+_COMPOUND_VISUAL_MIN_BLOCKS = 4
+_COMPOUND_VISUAL_MIN_AREA_RATIO = 0.05
 
 
 def _docling_components():
@@ -135,6 +137,8 @@ def _extract_docling_figures(
             continue
         if _area_ratio(element, document) < config.figure_min_area_ratio:
             continue
+        if len(out) >= config.figure_max_per_paper:
+            break
 
         page, bbox = _provenance(element)
         try:
@@ -146,8 +150,6 @@ def _extract_docling_figures(
         if image_sha256 in seen_hashes:
             continue
         seen_hashes.add(image_sha256)
-        if len(out) >= config.figure_max_per_paper:
-            break
 
         try:
             caption = str(element.caption_text(document) or "").strip()
@@ -166,13 +168,14 @@ def _extract_docling_figures(
                 staging_path=staged_path,
             )
         )
+    _remove_empty_staging_dir(staging_dir)
     return out
 
 
 def _extract_pymupdf_figures(
     path: Path, doc_id: str, config: Config
 ) -> list[FigureAsset]:
-    """Offline fallback for PDFs containing embedded raster figure images.
+    """Extract standalone raster figures, then compound image-tile pages.
 
     This does not replace Docling's layout model for vector-heavy diagrams,
     but keeps the feature useful on air-gapped machines or before Docling's
@@ -187,6 +190,9 @@ def _extract_pymupdf_figures(
     staging_dir.mkdir(parents=True, exist_ok=True)
     out: list[FigureAsset] = []
     seen_hashes: set[str] = set()
+    compound_candidates: list[
+        tuple[int, tuple[float, float, float, float], list[tuple[tuple[float, float, float, float], str]]]
+    ] = []
     try:
         pdf = pymupdf.open(str(path))
     except Exception as exc:
@@ -196,6 +202,7 @@ def _extract_pymupdf_figures(
             blocks = page.get_text("dict").get("blocks", [])
             captions = _page_captions(blocks)
             page_area = float(page.rect.width) * float(page.rect.height)
+            image_bboxes: list[tuple[float, float, float, float]] = []
             for block in blocks:
                 if block.get("type") != 1:
                     continue
@@ -203,10 +210,13 @@ def _extract_pymupdf_figures(
                 if not isinstance(raw_bbox, (tuple, list)) or len(raw_bbox) != 4:
                     continue
                 bbox = tuple(float(value) for value in raw_bbox)
+                image_bboxes.append(bbox)
                 width = abs(bbox[2] - bbox[0])
                 height = abs(bbox[3] - bbox[1])
                 if page_area <= 0 or (width * height) / page_area < config.figure_min_area_ratio:
                     continue
+                if len(out) >= config.figure_max_per_paper:
+                    break
                 try:
                     scale = max(0.5, float(config.figure_image_scale))
                     pix = page.get_pixmap(
@@ -222,8 +232,6 @@ def _extract_pymupdf_figures(
                 if image_sha256 in seen_hashes:
                     continue
                 seen_hashes.add(image_sha256)
-                if len(out) >= config.figure_max_per_paper:
-                    return out
                 out.append(
                     FigureAsset(
                         figure_id=f"{doc_id}:figure:{image_sha256[:12]}",
@@ -236,8 +244,101 @@ def _extract_pymupdf_figures(
                         staging_path=staged_path,
                     )
                 )
+            if not out:
+                compound_bbox = _compound_visual_bbox(image_bboxes, page.rect, config)
+                if compound_bbox is not None:
+                    compound_candidates.append((page_number, compound_bbox, captions))
+            if len(out) >= config.figure_max_per_paper:
+                break
+        if not out:
+            out = _extract_compound_pymupdf_figures(
+                pdf, compound_candidates, staging_dir, doc_id, config
+            )
     finally:
         pdf.close()
+    _remove_empty_staging_dir(staging_dir)
+    return out
+
+
+def _compound_visual_bbox(
+    bboxes: list[tuple[float, float, float, float]], page_rect: Any, config: Config
+) -> tuple[float, float, float, float] | None:
+    """Return a single crop for a page whose figure is split into image tiles."""
+    if len(bboxes) < _COMPOUND_VISUAL_MIN_BLOCKS:
+        return None
+    page_area = float(page_rect.width) * float(page_rect.height)
+    occupied_area = sum(
+        abs((bbox[2] - bbox[0]) * (bbox[3] - bbox[1])) for bbox in bboxes
+    )
+    minimum = max(
+        _COMPOUND_VISUAL_MIN_AREA_RATIO, config.figure_min_area_ratio * 2.0
+    )
+    if page_area <= 0 or occupied_area / page_area < minimum:
+        return None
+    left = min(bbox[0] for bbox in bboxes)
+    top = min(bbox[1] for bbox in bboxes)
+    right = max(bbox[2] for bbox in bboxes)
+    bottom = max(bbox[3] for bbox in bboxes)
+    padding = min(12.0, max(2.0, min(right - left, bottom - top) * 0.03))
+    return (
+        max(float(page_rect.x0), left - padding),
+        max(float(page_rect.y0), top - padding),
+        min(float(page_rect.x1), right + padding),
+        min(float(page_rect.y1), bottom + padding),
+    )
+
+
+def _extract_compound_pymupdf_figures(
+    pdf: Any,
+    candidates: list[
+        tuple[int, tuple[float, float, float, float], list[tuple[tuple[float, float, float, float], str]]]
+    ],
+    staging_dir: Path,
+    doc_id: str,
+    config: Config,
+) -> list[FigureAsset]:
+    """Render image-tile groups when a PDF exposes no standalone figure crop."""
+    try:
+        import pymupdf
+    except ModuleNotFoundError as exc:  # pragma: no cover - project dependency
+        raise FigureError("PyMuPDF is not installed") from exc
+
+    out: list[FigureAsset] = []
+    seen_hashes: set[str] = set()
+    for page_number, bbox, captions in candidates:
+        if len(out) >= config.figure_max_per_paper:
+            break
+        try:
+            page = pdf[page_number - 1]
+            scale = max(0.5, float(config.figure_image_scale))
+            pix = page.get_pixmap(
+                clip=pymupdf.Rect(bbox),
+                matrix=pymupdf.Matrix(scale, scale),
+                alpha=False,
+            )
+            staged_path, image_sha256 = _stage_bytes(
+                pix.tobytes("png"), staging_dir, "figure", page_number
+            )
+        except Exception:
+            continue
+        if image_sha256 in seen_hashes:
+            continue
+        seen_hashes.add(image_sha256)
+        caption = _nearest_caption(bbox, captions)
+        if not caption:
+            caption = f"Compound visual rendered from image tiles on page {page_number}."
+        out.append(
+            FigureAsset(
+                figure_id=f"{doc_id}:figure:{image_sha256[:12]}",
+                index=len(out) + 1,
+                page=page_number,
+                source_kind="figure",
+                caption=caption,
+                bbox=bbox,
+                image_sha256=image_sha256,
+                staging_path=staged_path,
+            )
+        )
     return out
 
 
@@ -516,9 +617,16 @@ def _error_summary(exc: Exception) -> str:
 def _remove_empty_staging_dirs(figures: list[FigureAsset]) -> None:
     dirs = {figure.staging_path.parent for figure in figures if figure.staging_path}
     for directory in dirs:
-        try:
-            directory.rmdir()
-            parent = directory.parent
-            parent.rmdir()
-        except OSError:
-            pass
+        _remove_empty_staging_dir(directory)
+
+
+def _remove_empty_staging_dir(directory: Path) -> None:
+    """Remove a document staging directory only when all of its assets moved."""
+    try:
+        directory.rmdir()
+    except OSError:
+        return
+    try:
+        directory.parent.rmdir()
+    except OSError:
+        pass

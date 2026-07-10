@@ -351,6 +351,24 @@ paperroach build "paper.pdf" --figure-mode describe
 paperroach build "paper.pdf" --figure-mode extract --figure-backend pymupdf
 ```
 
+To enrich papers that were indexed before figure support existed, use the
+backfill command. It reads each generated note's original `kb-source` PDF,
+preserves the existing analysis and `## My Notes` content, and updates only the
+generated Key Figures section and figure index. Preview first, then apply:
+
+```bash
+paperroach enrich-figures --figure-mode describe --figure-backend pymupdf
+paperroach enrich-figures --figure-mode describe --figure-backend pymupdf --apply
+```
+
+Use `--limit N` to process a smaller batch. Papers with indexed figures are
+skipped by default; add `--force` to refresh them. The default command is a dry
+run; only `--apply` writes assets, notes, and LanceDB figure rows.
+
+When a PDF exposes a figure as many small image tiles rather than one large
+embedded crop, the PyMuPDF backend can render the compound page visual as a
+fallback. This path runs only when no standalone figure crop qualifies.
+
 ```toml
 figure_mode = "describe"       # off | extract | describe
 figure_backend = "docling"     # docling | pymupdf

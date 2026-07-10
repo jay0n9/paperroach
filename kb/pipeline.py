@@ -53,7 +53,7 @@ from kb.models import (
     doc_id_for,
 )
 from kb.ollama_client import OllamaClient, OllamaError
-from kb.store import KBStore, table_names
+from kb.store import KBStore, document_rows, figure_doc_ids, table_names
 
 
 def _log(msg: str) -> None:
@@ -704,6 +704,193 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
         "succeeded": [d.doc_id for d in docs],
         "skipped_duplicates": dup_ids,
     }
+
+
+def enrich_figures(
+    config: Config, apply: bool = False, limit: int | None = None, force: bool = False
+) -> dict:
+    """Backfill visual evidence into existing generated PDF notes.
+
+    Re-running ``build`` intentionally skips already-indexed PDFs. This command
+    uses each note's ``kb-source`` frontmatter path instead, preserving the
+    existing prose analysis and personal notes while updating only Key Figures
+    and the figure vector index.
+    """
+    if config.figure_mode == "off":
+        _log("Figure mode is off. Pass --figure-mode extract or describe.")
+        return {"eligible": 0, "updated": 0, "blocked": 0, "needs_mode": True}
+    if limit is not None and limit < 1:
+        raise ValueError(f"limit must be at least 1 (got {limit})")
+
+    candidates, blocked, already_indexed = _figure_backfill_candidates(config, force=force)
+    if limit is not None:
+        candidates = candidates[:limit]
+    _log(
+        f"Figure backfill: {len(candidates)} eligible PDF note(s), "
+        f"{already_indexed} already indexed, {len(blocked)} blocked."
+    )
+    for row, _source, _note in candidates[:8]:
+        _log(f"  - {row.get('title') or row['doc_id']}")
+    if len(candidates) > 8:
+        _log(f"  ... and {len(candidates) - 8} more")
+    if blocked:
+        for title, reason in blocked[:5]:
+            _log(f"  ! skipped {title}: {reason}")
+    if not apply:
+        _log("Dry run -- nothing changed. Re-run with --apply to enrich notes.")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_indexed": already_indexed,
+        }
+    if not candidates:
+        return {
+            "eligible": 0,
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_indexed": already_indexed,
+        }
+
+    config.ensure_dirs()
+    store = KBStore(config)
+    client = OllamaClient(config)
+    try:
+        client.ping()
+    except OllamaError as exc:
+        _log(f"  ! {exc}")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_indexed": already_indexed,
+        }
+
+    extracted: list[tuple[dict, Path, Path, list[FigureAsset]]] = []
+    for index, (row, source, note) in enumerate(candidates, 1):
+        title = str(row.get("title") or source.stem)
+        _log(f"  [{index}/{len(candidates)}] extracting {title}")
+        try:
+            figures = figures_mod.extract_figures(source, row["doc_id"], config)
+        except Exception as exc:
+            _log(f"      ! figure extraction failed: {exc}")
+            continue
+        if not figures:
+            _log("      · no supported figure assets found; preserving prior state")
+            continue
+        _log(f"      · {len(figures)} figure asset(s) extracted")
+        extracted.append((row, source, note, figures))
+
+    if not extracted:
+        _log("No existing note could be enriched.")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_indexed": already_indexed,
+        }
+
+    if config.figure_mode == "describe":
+        total = sum(len(figures) for _row, _source, _note, figures in extracted)
+        _log(f"  describing {total} figure(s) with {config.vision_model} …")
+        client.unload_llm()
+        client.unload_embed()
+        try:
+            for row, _source, _note, figures in extracted:
+                described, errors = figures_mod.describe_figures(figures, client, config)
+                _log(f"      · {row.get('title') or row['doc_id']}: {described}/{len(figures)}")
+                for error in errors[:3]:
+                    _log(f"        ! {error}")
+        finally:
+            client.unload_vision()
+
+    client.unload_llm()
+    embedded: list[tuple[dict, Path, Path, list[FigureAsset], list[list[float]]]] = []
+    for row, source, note, figures in extracted:
+        try:
+            vectors = client.embed([figure.searchable_text() for figure in figures])
+            embedded.append((row, source, note, figures, vectors))
+        except Exception as exc:
+            figures_mod.discard_staged_assets(figures)
+            _log(f"      ! figure embedding failed for {row.get('title') or row['doc_id']}: {exc}")
+    client.unload_embed()
+
+    updated = 0
+    notes_written = 0
+    for row, source, note, figures, vectors in embedded:
+        title = str(row.get("title") or source.stem)
+        try:
+            figures_mod.finalize_assets(figures, row["doc_id"], config)
+            if obsidian.update_figures_in_file(note, figures):
+                notes_written += 1
+            doc = Document(
+                doc_id=row["doc_id"],
+                source_path=source,
+                kind="pdf",
+                markdown="",
+                metadata=PaperMetadata(
+                    title=title,
+                    authors=[str(author) for author in (row.get("authors") or [])],
+                    year=row.get("year") if isinstance(row.get("year"), int) else None,
+                ),
+                figures=figures,
+                figures_synced=True,
+            )
+            doc.note_path = note
+            store.replace_figures(doc, vectors)
+            updated += 1
+        except Exception as exc:
+            _log(f"      ! figure update failed for {title}: {exc}")
+
+    store.optimize()
+    _log(f"Figure backfill complete: {updated} paper(s), {notes_written} note(s) updated.")
+    return {
+        "eligible": len(candidates),
+        "updated": updated,
+        "notes_written": notes_written,
+        "blocked": len(blocked),
+        "already_indexed": already_indexed,
+    }
+
+
+def _figure_backfill_candidates(
+    config: Config,
+    force: bool = False,
+) -> tuple[list[tuple[dict, Path, Path]], list[tuple[str, str]], int]:
+    """Find generated PDF notes whose original source PDF still exists."""
+    rows = document_rows(
+        config,
+        columns=["doc_id", "title", "authors", "year", "kind", "note_path"],
+    )
+    candidates: list[tuple[dict, Path, Path]] = []
+    blocked: list[tuple[str, str]] = []
+    indexed = set() if force else figure_doc_ids(config)
+    already_indexed = 0
+    for row in rows:
+        if row.get("kind") != "pdf":
+            continue
+        title = str(row.get("title") or row["doc_id"])
+        if row["doc_id"] in indexed:
+            already_indexed += 1
+            continue
+        note_value = str(row.get("note_path") or "").strip()
+        note = Path(note_value) if note_value else None
+        if note is None or not note.exists():
+            blocked.append((title, "generated note is missing"))
+            continue
+        if not obsidian.is_generated_note(note):
+            blocked.append((title, "note is not PaperRoach-generated"))
+            continue
+        source_value = obsidian._read_frontmatter(note).get("kb-source")
+        if not isinstance(source_value, str) or not source_value.strip():
+            blocked.append((title, "kb-source frontmatter is missing"))
+            continue
+        source = Path(source_value).expanduser()
+        if not source.exists() or not source.is_file() or source.suffix.lower() != ".pdf":
+            blocked.append((title, "source PDF is unavailable"))
+            continue
+        candidates.append((row, source, note))
+    return candidates, blocked, already_indexed
 
 
 def _refresh_related_links(docs: list[Document], store: KBStore, config: Config) -> None:

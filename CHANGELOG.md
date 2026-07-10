@@ -17,6 +17,8 @@ release. Follow semantic versioning and keep entries short enough to scan.
 - Optional figure-aware PDF enrichment with Docling-first extraction, an
   offline PyMuPDF fallback, local vision descriptions, Obsidian figure embeds,
   and LanceDB figure retrieval.
+- `paperroach enrich-figures` to backfill visual evidence into existing
+  generated paper notes without rerunning full paper analysis.
 
 ### Changed
 

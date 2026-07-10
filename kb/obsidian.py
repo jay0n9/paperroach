@@ -38,6 +38,7 @@ _RESERVED_NAMES = {
 _INLINE_MATH = re.compile(r"(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)")
 
 _MATH_CHARS = set("\\^_={}")
+_KEY_FIGURES_RE = re.compile(r"(?ms)^## Key Figures\n.*?(?=^## |\Z)")
 
 
 def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -381,7 +382,7 @@ def _existing_key_figures(note_path: Path | None) -> str:
     if note_path is None or not note_path.exists():
         return ""
     text = _read_text_tolerant(note_path)
-    match = re.search(r"(?ms)^## Key Figures\n.*?(?=^## |\Z)", text)
+    match = _KEY_FIGURES_RE.search(text)
     return match.group(0).rstrip() if match else ""
 
 
@@ -558,6 +559,43 @@ def update_related_in_file(path: Path, related_links: list[str]) -> bool:
         sep = "" if original.endswith("\n") else "\n"
         updated = f"{original}{sep}\n{RELATED_HEADING}\n\n{block}\n"
 
+    if updated != original:
+        write_text_atomic(path, updated)
+        return True
+    return False
+
+
+def update_figures_in_file(path: Path, figures: list[FigureAsset]) -> bool:
+    """Insert or replace the generated figure section without rewriting a note.
+
+    The historical backfill path must preserve user writing and existing paper
+    analysis. Only the generated ``## Key Figures`` section is managed here.
+    """
+    if not path.exists() or not figures:
+        return False
+    original = _read_text_tolerant(path)
+    section = "\n".join(_render_figures(figures)).strip()
+    match = _KEY_FIGURES_RE.search(original)
+    if match:
+        updated = (
+            original[:match.start()]
+            + section
+            + "\n\n"
+            + original[match.end():].lstrip()
+        )
+    else:
+        # Keep figures near generated analysis, before concepts, related work,
+        # personal notes, or references when any of those sections exists.
+        boundary = re.search(
+            r"(?m)^## (?:Concepts|Related Papers|My Notes)\b|^# References\b",
+            original,
+        )
+        if boundary:
+            prefix = original[:boundary.start()].rstrip()
+            suffix = original[boundary.start():]
+            updated = f"{prefix}\n\n{section}\n\n{suffix}"
+        else:
+            updated = original.rstrip() + f"\n\n{section}\n"
     if updated != original:
         write_text_atomic(path, updated)
         return True

@@ -182,6 +182,33 @@ def figure_count(config: Config) -> int:
     return db.open_table("figures").count_rows()
 
 
+def document_rows(config: Config, columns: list[str] | None = None) -> list[dict]:
+    """Read document metadata without creating missing LanceDB tables."""
+    validate_store_meta(config)
+    if "docs" not in table_names(config):
+        return []
+    db = lancedb.connect(str(config.kb_path))
+    table = db.open_table("docs")
+    if table.count_rows() == 0:
+        return []
+    data = table.to_arrow()
+    if columns:
+        data = data.select(columns)
+    return data.to_pylist()
+
+
+def figure_doc_ids(config: Config) -> set[str]:
+    """Return document ids with at least one indexed figure without mutations."""
+    validate_store_meta(config)
+    if "figures" not in table_names(config):
+        return set()
+    db = lancedb.connect(str(config.kb_path))
+    table = db.open_table("figures")
+    if table.count_rows() == 0:
+        return set()
+    return {str(row["doc_id"]) for row in table.to_arrow().select(["doc_id"]).to_pylist()}
+
+
 class KBStore:
     def __init__(self, config: Config):
         self.config = config

@@ -2,6 +2,7 @@
 
     paperroach init                 scaffold kb.toml + vault folders
     paperroach build <paths...>     run the full pipeline (PASS A → swap → PASS B)
+    paperroach enrich-figures       add visual evidence to existing paper notes
     paperroach search "<query>"     semantic search over chunks
     paperroach ask "<query>"        RAG answer grounded in your library
     paperroach relink               recompute related-literature wikilinks
@@ -80,6 +81,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_common(p_build)
     p_build.set_defaults(func=cmd_build)
+
+    p_figures = sub.add_parser(
+        "enrich-figures",
+        help="Backfill figures into existing generated PDF paper notes",
+    )
+    p_figures.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually extract, describe, and write figures (default: dry run)",
+    )
+    p_figures.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process at most this many eligible notes",
+    )
+    p_figures.add_argument(
+        "--force",
+        action="store_true",
+        help="Reprocess notes that already have indexed figures",
+    )
+    _add_common(p_figures)
+    p_figures.set_defaults(func=cmd_enrich_figures)
 
     p_search = sub.add_parser("search", help="Semantic search over chunks")
     p_search.add_argument("query")
@@ -308,6 +332,22 @@ def cmd_build(args: argparse.Namespace) -> int:
         return 1
 
     return _run_locked(config, "build", run)
+
+
+def cmd_enrich_figures(args: argparse.Namespace) -> int:
+    from kb import pipeline
+
+    config = _config_from_args(args)
+
+    def run() -> int:
+        result = pipeline.enrich_figures(
+            config, apply=args.apply, limit=args.limit, force=args.force
+        )
+        return 2 if result.get("needs_mode") else 0
+
+    if args.apply:
+        return _run_locked(config, "enrich-figures", run)
+    return run()
 
 
 def cmd_search(args: argparse.Namespace) -> int:

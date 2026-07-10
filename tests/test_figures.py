@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from kb import figures, obsidian, rag
+from kb import figures, obsidian, pipeline, rag
 from kb.config import Config
-from kb.models import Document, FigureAsset, PaperMetadata
+from kb.models import Chunk, Document, FigureAsset, PaperMetadata
 from kb.store import KBStore
 
 
@@ -106,6 +106,23 @@ class FakeVisionClient:
             "uncertainties": ["Small labels are not fully legible."],
             "importance": "critical",
         }
+
+
+class FakeBackfillClient:
+    def __init__(self, config):
+        self.config = config
+
+    def ping(self):
+        return None
+
+    def unload_llm(self):
+        return None
+
+    def unload_embed(self):
+        return None
+
+    def embed(self, texts):
+        return [[1.0, 0.0] for _ in texts]
 
 
 class FigurePipelineTests(unittest.TestCase):
@@ -287,6 +304,75 @@ class FigurePipelineTests(unittest.TestCase):
             self.assertIn("Figure 1", extracted[0].caption)
             self.assertTrue(extracted[0].staging_path.exists())
 
+    def test_pymupdf_fallback_renders_compound_image_tiles(self):
+        try:
+            import pymupdf
+        except ModuleNotFoundError:  # pragma: no cover - project dependency
+            self.skipTest("PyMuPDF is not installed")
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = self._config(root, figure_backend="pymupdf")
+            png = root / "tile.png"
+            png.write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAFklEQVR4nGP8//8/A27AhEeO"
+                    "YeRKAwCl4wMRx3ocVQAAAABJRU5ErkJggg=="
+                )
+            )
+            source = root / "compound.pdf"
+            pdf = pymupdf.open()
+            page = pdf.new_page(width=400, height=500)
+            for rect in (
+                pymupdf.Rect(40, 80, 100, 140),
+                pymupdf.Rect(120, 80, 180, 140),
+                pymupdf.Rect(40, 160, 100, 220),
+                pymupdf.Rect(120, 160, 180, 220),
+            ):
+                page.insert_image(rect, filename=str(png))
+            page.insert_text((40, 260), "Figure 2: Four-part reconstruction comparison.", fontsize=12)
+            pdf.save(source)
+            pdf.close()
+
+            extracted = figures.extract_figures(source, "compounddoc", config)
+
+            self.assertEqual(len(extracted), 1)
+            self.assertEqual(extracted[0].page, 1)
+            self.assertIn("Figure 2", extracted[0].caption)
+            staged = list((config.kb_path / "figure-staging" / "compounddoc").glob("*.png"))
+            self.assertEqual(staged, [extracted[0].staging_path])
+
+    def test_pymupdf_limit_does_not_leave_extra_staging_assets(self):
+        try:
+            import pymupdf
+        except ModuleNotFoundError:  # pragma: no cover - project dependency
+            self.skipTest("PyMuPDF is not installed")
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = self._config(root, figure_backend="pymupdf", figure_max_per_paper=1)
+            png = root / "figure.png"
+            png.write_bytes(
+                base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAFklEQVR4nGP8//8/A27AhEeO"
+                    "YeRKAwCl4wMRx3ocVQAAAABJRU5ErkJggg=="
+                )
+            )
+            source = root / "limit.pdf"
+            pdf = pymupdf.open()
+            first = pdf.new_page(width=400, height=500)
+            first.insert_image(pymupdf.Rect(40, 80, 360, 300), filename=str(png))
+            second = pdf.new_page(width=400, height=500)
+            second.insert_image(pymupdf.Rect(40, 80, 340, 280), filename=str(png))
+            pdf.save(source)
+            pdf.close()
+
+            extracted = figures.extract_figures(source, "limitdoc", config)
+
+            self.assertEqual(len(extracted), 1)
+            staged = list((config.kb_path / "figure-staging" / "limitdoc").glob("*.png"))
+            self.assertEqual(staged, [extracted[0].staging_path])
+
     def test_docling_failure_uses_pymupdf_fallback(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -303,6 +389,64 @@ class FigurePipelineTests(unittest.TestCase):
                     figures, "_extract_pymupdf_figures", return_value=expected
                 ):
                     self.assertIs(figures.extract_figures(source, "doc", config), expected)
+
+    def test_existing_note_backfill_preserves_user_content_and_indexes_figures(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = self._config(root, embed_dim=2)
+            source = root / "historical.pdf"
+            source.write_bytes(b"%PDF-1.4\n")
+            note = config.references_path / "Historical Paper (2024).md"
+            note.write_text(
+                "---\n"
+                "kb-generated: true\n"
+                f"kb-source: {source}\n"
+                "---\n"
+                "# Historical Paper\n\n"
+                "## TL;DR\n\nExisting summary.\n\n"
+                "## My Notes\n\nKeep this personal observation.\n\n"
+                "---\n# References\n",
+                encoding="utf-8",
+            )
+            doc = Document(
+                doc_id="historical01",
+                source_path=source,
+                kind="pdf",
+                markdown="# Historical Paper",
+                metadata=PaperMetadata(title="Historical Paper", year=2024),
+                chunks=[Chunk(chunk_index=0, header="", text="Existing summary")],
+            )
+            doc.note_path = note
+            store = KBStore(config)
+            store.upsert_document(doc, [[1.0, 0.0]], [1.0, 0.0])
+
+            def extract(_source, doc_id, cfg):
+                stage = cfg.kb_path / "figure-staging" / doc_id
+                stage.mkdir(parents=True)
+                image = stage / "figure.png"
+                image.write_bytes(b"historical figure")
+                return [
+                    FigureAsset(
+                        figure_id=f"{doc_id}:figure:historical",
+                        index=1,
+                        page=4,
+                        caption="Figure 1: Historical prototype.",
+                        image_sha256=hashlib.sha256(image.read_bytes()).hexdigest(),
+                        staging_path=image,
+                    )
+                ]
+
+            with patch.object(pipeline, "OllamaClient", FakeBackfillClient):
+                with patch.object(pipeline.figures_mod, "extract_figures", side_effect=extract):
+                    preview = pipeline.enrich_figures(config, apply=False)
+                    result = pipeline.enrich_figures(config, apply=True)
+
+            self.assertEqual(preview["eligible"], 1)
+            self.assertEqual(result["updated"], 1)
+            rendered = note.read_text(encoding="utf-8")
+            self.assertIn("## Key Figures", rendered)
+            self.assertIn("Keep this personal observation.", rendered)
+            self.assertEqual(KBStore(config).figures.count_rows(), 1)
 
 
 if __name__ == "__main__":
