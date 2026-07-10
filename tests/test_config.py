@@ -369,6 +369,36 @@ class ConfigLoadingTests(unittest.TestCase):
             self.assertEqual(config.vault_path, target_vault)
             self.assertEqual(config.llm_model, "vault-model")
 
+    def test_figure_configuration_is_validated_and_assets_stay_in_vault(self):
+        with tempfile.TemporaryDirectory() as td:
+            vault = Path(td) / "vault"
+            vault.mkdir()
+
+            config = load_config(
+                {
+                    "vault_path": str(vault),
+                    "figure_mode": "describe",
+                    "vision_model": "qwen2.5vl:7b",
+                    "figure_assets_dir": "Assets/PaperRoach",
+                }
+            )
+
+            self.assertEqual(config.figure_mode, "describe")
+            self.assertEqual(config.figure_assets_path, vault / "Assets" / "PaperRoach")
+
+            with self.assertRaises(ConfigError) as invalid_mode:
+                load_config({"vault_path": str(vault), "figure_mode": "all"})
+            self.assertIn("Unknown figure_mode", str(invalid_mode.exception))
+
+            with self.assertRaises(ConfigError) as outside_assets:
+                load_config(
+                    {
+                        "vault_path": str(vault),
+                        "figure_assets_dir": "../outside",
+                    }
+                )
+            self.assertIn("figure_assets_dir must be a relative path", str(outside_assets.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

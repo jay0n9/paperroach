@@ -26,6 +26,10 @@ _ENV = {
     "embed_dim": "KB_EMBED_DIM",
     "keep_alive": "KB_KEEP_ALIVE",
     "ingester": "KB_INGESTER",
+    "figure_mode": "KB_FIGURE_MODE",
+    "figure_backend": "KB_FIGURE_BACKEND",
+    "vision_model": "KB_VISION_MODEL",
+    "figure_assets_dir": "KB_FIGURE_ASSETS_DIR",
     "zotero_dir": "KB_ZOTERO_DIR",
 }
 
@@ -36,6 +40,7 @@ _BOOL_FIELDS = {
     "create_concept_notes",
     "references_by_subject",
     "references_by_subdomain",
+    "figure_include_tables",
 }
 _INT_FIELDS = {
     "llm_num_ctx",
@@ -50,7 +55,9 @@ _INT_FIELDS = {
     "ocr_dpi",
     "nougat_batchsize",
     "watch_interval",
+    "figure_max_per_paper",
 }
+_FLOAT_FIELDS = {"figure_min_area_ratio", "figure_image_scale"}
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off"}
 _POSITIVE_INT_FIELDS = {
@@ -63,10 +70,18 @@ _POSITIVE_INT_FIELDS = {
     "rag_top_k",
     "ocr_dpi",
     "watch_interval",
+    "figure_max_per_paper",
 }
 _NONNEGATIVE_INT_FIELDS = {"chunk_overlap", "nougat_batchsize"}
-_RELATIVE_DIR_FIELDS = {"references_dir", "knowledge_library_dir", "tags_dir"}
+_RELATIVE_DIR_FIELDS = {
+    "references_dir",
+    "knowledge_library_dir",
+    "tags_dir",
+    "figure_assets_dir",
+}
 _INGESTERS = {"pymupdf4llm", "ocr", "nougat", "docling"}
+_FIGURE_MODES = {"off", "extract", "describe"}
+_FIGURE_BACKENDS = {"docling", "pymupdf"}
 
 
 @dataclass
@@ -87,6 +102,7 @@ class Config:
     embed_model: str = "bge-m3"
     embed_dim: int = 1024
     keep_alive: str = "30m"
+    vision_model: str = "qwen2.5vl:7b"
 
     # ── LLM metadata + analysis extraction ───────────────────────────
     meta_input_chars: int = 12000
@@ -115,6 +131,16 @@ class Config:
     # <references_dir>/<Domain>/<Subdomain>/.
     references_by_subdomain: bool = True
 
+    # Optional figure-aware PDF enrichment. It is opt-in because Docling and a
+    # vision model add substantial download and processing costs.
+    figure_mode: str = "off"  # "off" | "extract" | "describe"
+    figure_backend: str = "docling"
+    figure_assets_dir: str = "Assets/PaperRoach"
+    figure_max_per_paper: int = 12
+    figure_min_area_ratio: float = 0.02
+    figure_image_scale: float = 2.0
+    figure_include_tables: bool = False
+
     # ── Zotero integration ───────────────────────────────────────────
     zotero_dir: str = ""          # "" → auto-detect from the Zotero profile
     zotero_enrich: bool = True    # prefer Zotero DB metadata (title/authors/year/tags)
@@ -133,9 +159,15 @@ class Config:
     def knowledge_library_path(self) -> Path:
         return self.vault_path / self.knowledge_library_dir
 
+    @property
+    def figure_assets_path(self) -> Path:
+        return self.vault_path / self.figure_assets_dir
+
     def ensure_dirs(self) -> None:
         self.kb_path.mkdir(parents=True, exist_ok=True)
         self.references_path.mkdir(parents=True, exist_ok=True)
+        if self.figure_mode != "off":
+            self.figure_assets_path.mkdir(parents=True, exist_ok=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -192,6 +224,11 @@ def _coerce(field_name: str, value):
             return int(value)
         except (TypeError, ValueError) as exc:
             raise ConfigError(f"Invalid integer for {field_name}: {value!r}") from exc
+    if field_name in _FLOAT_FIELDS:
+        try:
+            return float(value)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(f"Invalid number for {field_name}: {value!r}") from exc
     return value
 
 
@@ -213,6 +250,27 @@ def _validate_config(cfg: Config) -> None:
     if cfg.ingester not in _INGESTERS:
         choices = ", ".join(sorted(_INGESTERS))
         raise ConfigError(f"Unknown ingester {cfg.ingester!r}. Choose one of: {choices}.")
+    if cfg.figure_mode not in _FIGURE_MODES:
+        choices = ", ".join(sorted(_FIGURE_MODES))
+        raise ConfigError(
+            f"Unknown figure_mode {cfg.figure_mode!r}. Choose one of: {choices}."
+        )
+    if cfg.figure_backend not in _FIGURE_BACKENDS:
+        choices = ", ".join(sorted(_FIGURE_BACKENDS))
+        raise ConfigError(
+            f"Unknown figure_backend {cfg.figure_backend!r}. Choose one of: {choices}."
+        )
+    if not 0.0 < cfg.figure_min_area_ratio <= 1.0:
+        raise ConfigError(
+            "figure_min_area_ratio must be greater than 0 and at most 1 "
+            f"(got {cfg.figure_min_area_ratio})."
+        )
+    if cfg.figure_image_scale <= 0:
+        raise ConfigError(
+            f"figure_image_scale must be greater than 0 (got {cfg.figure_image_scale})."
+        )
+    if cfg.figure_mode == "describe" and not cfg.vision_model.strip():
+        raise ConfigError("vision_model must be set when figure_mode is 'describe'.")
     for field_name in _RELATIVE_DIR_FIELDS:
         value = str(getattr(cfg, field_name) or "").strip()
         path = Path(value).expanduser()

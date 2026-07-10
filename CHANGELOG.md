@@ -14,6 +14,9 @@ release. Follow semantic versioning and keep entries short enough to scan.
 - Contributor, governance, code-of-conduct, security, citation, CODEOWNERS,
   issue-form, pull-request, and Dependabot foundations for public development.
 - Isolated wheel-install smoke testing in CI.
+- Optional figure-aware PDF enrichment with Docling-first extraction, an
+  offline PyMuPDF fallback, local vision descriptions, Obsidian figure embeds,
+  and LanceDB figure retrieval.
 
 ### Changed
 
@@ -26,6 +29,8 @@ release. Follow semantic versioning and keep entries short enough to scan.
   only holds a writer lock while it is actually building a batch.
 - Configuration now rejects invalid pipeline sizes, unsafe vault-relative
   output paths, and unknown PDF ingesters before work starts.
+- Figure extraction is opt-in and uses a separate vision-model pass so visual,
+  text, and embedding models do not co-reside on an 8 GB GPU.
 
 ### Fixed
 

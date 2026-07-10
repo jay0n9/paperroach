@@ -76,6 +76,22 @@ ingester = "pymupdf4llm"
 # Rasterisation DPI used when OCR-ing a scanned PDF (rapidocr, CPU).
 ocr_dpi = 200
 
+# Optional figure-aware enrichment. "extract" saves figure crops and captions;
+# "describe" additionally sends each crop to the configured local vision model.
+# The Docling backend requires `pip install 'paperroach[docling]'`; the
+# PyMuPDF backend is included with the normal PDF parser. Keep this off for
+# the original text-only pipeline.
+figure_mode = "off"               # "off" | "extract" | "describe"
+# "docling" finds layout-aware pictures/tables; "pymupdf" is an offline,
+# fast fallback for PDFs with embedded raster images.
+figure_backend = "docling"
+figure_assets_dir = "Assets/PaperRoach"
+vision_model = "qwen2.5vl:7b"
+figure_max_per_paper = 12
+figure_min_area_ratio = 0.02
+figure_image_scale = 2.0
+figure_include_tables = false
+
 # Inject/refresh an auto-managed "Related Papers" block inside your existing
 # Markdown notes when they are indexed. Generated reference notes are
 # always (re)written in full.

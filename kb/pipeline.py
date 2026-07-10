@@ -1,8 +1,8 @@
-"""Build orchestration: PASS A (ingest, then LLM) → model swap → PASS B.
+"""Build orchestration: ingest, visual analysis, LLM, then embeddings.
 
-    PASS A0  ingest every input → Markdown       [no Ollama model needed;
-                                                  nougat gets the GPU alone]
-    PASS A1  metadata → analysis → chunk          [Qwen3 8B resident]
+    PASS A0    ingest every input → Markdown + figure crops  [CPU]
+    PASS A0.5  describe figures                              [vision model]
+    PASS A1    metadata → analysis → chunk                   [Qwen3 8B]
        ⇄     unload LLM  ───────────────────────  [VRAM swap, once]
     PASS B   embed → link → write note → store     [bge-m3 resident]
 
@@ -22,6 +22,7 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
+from kb import figures as figures_mod
 from kb import ingest as ingest_mod
 from kb import knowledge
 from kb import obsidian
@@ -44,6 +45,7 @@ from kb.llm import (
 )
 from kb.models import (
     Document,
+    FigureAsset,
     PaperAnalysis,
     PaperClassification,
     PaperMetadata,
@@ -359,18 +361,54 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
     # No Ollama model is needed here, and the nougat ingester needs the GPU
     # to itself — interleaving ingest with the LLM would swap models per file.
     _log(f"PASS A0 · ingest · {len(inputs)} input(s)")
-    ingested: list[tuple[Path, str, str]] = []  # (path, kind, markdown)
+    # (path, kind, markdown, figures, figure extraction completed)
+    ingested: list[tuple[Path, str, str, list[FigureAsset], bool]] = []
     for i, path in enumerate(inputs, 1):
         _log(f"  [{i}/{len(inputs)}] {path.name}")
         try:
             kind = ingest_mod.kind_of(path)
             markdown = ingest_mod.ingest(path, config)
-            ingested.append((path, kind, markdown))
+            extracted_figures: list[FigureAsset] = []
+            figure_extraction_complete = False
+            if kind == "pdf" and config.figure_mode != "off":
+                _log("      · extracting figures …")
+                try:
+                    extracted_figures = figures_mod.extract_figures(
+                        path, doc_id_for(path), config
+                    )
+                    figure_extraction_complete = True
+                    _log(f"      · {len(extracted_figures)} figure asset(s) extracted")
+                except Exception as exc:
+                    # Figure parsing is optional: preserve text-only ingestion
+                    # when a Docling or image-processing problem occurs.
+                    _log(f"      ! figure extraction failed: {exc}")
+            ingested.append(
+                (path, kind, markdown, extracted_figures, figure_extraction_complete)
+            )
         except Exception as exc:  # one bad file shouldn't sink the batch
             _log(f"      ! ingest failed: {exc}")
     if not ingested:
         _log("Nothing ingested successfully.")
         return {"processed": 0, "succeeded": []}
+
+    if config.figure_mode == "describe":
+        figure_total = sum(len(figures) for _, _, _, figures, _ in ingested)
+        if figure_total:
+            _log(
+                f"PASS A0.5 · vision ({config.vision_model}) · "
+                f"{figure_total} figure(s)"
+            )
+            # The vision model is the only model allowed on the GPU in this pass.
+            client.unload_llm()
+            client.unload_embed()
+            for path, _kind, _markdown, figures, _complete in ingested:
+                if not figures:
+                    continue
+                described, errors = figures_mod.describe_figures(figures, client, config)
+                _log(f"  · {path.name}: described {described}/{len(figures)} figure(s)")
+                for error in errors[:3]:
+                    _log(f"      ! {error}")
+            client.unload_vision()
 
     # ── PASS A1 ── LLM resident ─────────────────────────────────────
     _log(f"PASS A1 · LLM ({config.llm_model}) · {len(ingested)} document(s)")
@@ -378,7 +416,8 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
     known_subjects = sorted(set(knowledge.list_subjects(config)) | set(taxonomy.domain_names()))
     tag_registry = tags_mod.load_registry(config)
     docs: list[Document] = []
-    for i, (path, kind, markdown) in enumerate(ingested, 1):
+    figure_sync_by_doc_id: dict[str, bool] = {}
+    for i, (path, kind, markdown, figures, figure_extraction_complete) in enumerate(ingested, 1):
         _log(f"  [{i}/{len(ingested)}] {path.name}")
         try:
             _log("      · extracting metadata …")
@@ -403,9 +442,12 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                 metadata.subdomain = meta_subdomain
             if metadata.subdomain:
                 _log(f"      · metadata subdomain: {metadata.subdomain}")
+            visual_evidence = figures_mod.figure_evidence(figures)
             _log("      · analysing paper …")
             try:
-                analysis = extract_analysis(client, markdown, metadata, config)
+                analysis = extract_analysis(
+                    client, markdown, metadata, config, visual_evidence=visual_evidence
+                )
             except Exception as exc:
                 _log(f"      · analysis failed ({exc}); writing note without it")
                 analysis = PaperAnalysis()
@@ -414,7 +456,13 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                 _log("      · classifying paper domain …")
                 try:
                     classification = classify_paper(
-                        client, markdown, metadata, analysis, config, known_subjects
+                        client,
+                        markdown,
+                        metadata,
+                        analysis,
+                        config,
+                        known_subjects,
+                        visual_evidence=visual_evidence,
                     )
                 except Exception as exc:
                     classification = _fallback_paper_classification(
@@ -507,11 +555,15 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                 classification=classification,
                 equations=equations,
                 equations_integrated=equations_integrated,
+                figures=figures,
+                figures_synced=figure_extraction_complete,
             )
+            figure_sync_by_doc_id[doc.doc_id] = figure_extraction_complete
             obsidian.assign_note_location(doc, config)
             _log(f"      · '{metadata.title}' — {len(chunks)} chunk(s)")
             docs.append(doc)
         except Exception as exc:  # one bad file shouldn't sink the batch
+            figures_mod.discard_staged_assets(figures)
             _log(f"      ! failed: {exc}")
 
     if not docs:
@@ -530,19 +582,30 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
         r["doc_id"]: r.get("note_path", "")
         for r in store.all_docs(columns=["doc_id", "note_path"])
     }
-    embedded: list[tuple[Document, list[list[float]], list[float]]] = []
+    embedded: list[tuple[Document, list[list[float]], list[float], list[list[float]]]] = []
     for i, doc in enumerate(docs, 1):
         _log(f"  [{i}/{len(docs)}] embedding {doc.metadata.title}")
         try:
-            # One request for chunks + summary (the last vector is the summary).
+            # One request for prose chunks, the paper summary, and visual
+            # evidence. All use the existing text embedding model.
             summary_text = doc.metadata.summary or doc.metadata.title
-            vectors = client.embed([c.text for c in doc.chunks] + [summary_text])
-            chunk_vectors, summary_vector = vectors[:-1], vectors[-1]
+            figure_texts = [figure.searchable_text() for figure in doc.figures]
+            visual_summary = figures_mod.figure_evidence(doc.figures, max_chars=1200)
+            if visual_summary:
+                summary_text = f"{summary_text}\n\nVisual evidence:\n{visual_summary}"
+            chunk_count = len(doc.chunks)
+            vectors = client.embed(
+                [c.text for c in doc.chunks] + [summary_text] + figure_texts
+            )
+            chunk_vectors = vectors[:chunk_count]
+            summary_vector = vectors[chunk_count]
+            figure_vectors = vectors[chunk_count + 1:]
             doc.summary_vector = summary_vector
-            embedded.append((doc, chunk_vectors, summary_vector))
+            embedded.append((doc, chunk_vectors, summary_vector, figure_vectors))
         except Exception as exc:
             # One transient failure must not discard the whole batch's PASS A
             # work — skip this document; a later run picks it up again.
+            figures_mod.discard_staged_assets(doc.figures)
             _log(f"      ! embedding failed: {exc}")
     if not embedded:
         _log("No document could be embedded.")
@@ -550,7 +613,7 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
 
     # ── ⑥ related-literature linking ────────────────────────────────
     _log("  linking related literature …")
-    for doc, _chunk_vectors, _summary_vector in embedded:
+    for doc, _chunk_vectors, _summary_vector, _figure_vectors in embedded:
         related = store.related_for_vector(
             doc.summary_vector,
             exclude_doc_id=doc.doc_id,
@@ -563,9 +626,12 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
     written = 0
     concept_paths: list[Path] = []
     stored: list[Document] = []
-    for doc, chunk_vectors, summary_vector in embedded:
+    for doc, chunk_vectors, summary_vector, figure_vectors in embedded:
         try:
             if doc.kind == "pdf":
+                if figure_sync_by_doc_id.get(doc.doc_id):
+                    if doc.figures:
+                        figures_mod.finalize_assets(doc.figures, doc.doc_id, config)
                 obsidian.write_generated_note(doc, doc.related, config)
                 written += 1
             elif config.rewrite_source_notes:
@@ -579,6 +645,12 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
 
         try:
             store.upsert_document(doc, chunk_vectors, summary_vector)
+            if (
+                figure_sync_by_doc_id.get(doc.doc_id)
+                and doc.figures
+                and hasattr(store, "replace_figures")
+            ):
+                store.replace_figures(doc, figure_vectors)
             if doc.kind == "pdf":
                 _cleanup_orphan(old_note_paths.get(doc.doc_id, ""), doc.note_path)
             stored.append(doc)
@@ -1492,6 +1564,7 @@ def gc(config: Config, apply: bool = False) -> dict:
     removed = 0
     for r in orphans:
         store.delete_doc(r["doc_id"])
+        figures_mod.delete_document_assets(r["doc_id"], config)
         removed += 1
     for r in dups:
         note_path = Path(r["note_path"]) if r.get("note_path") else None
@@ -1503,6 +1576,7 @@ def gc(config: Config, apply: bool = False) -> dict:
                 _log(f"  ! could not remove duplicate note: {note_path}")
                 continue
         store.delete_doc(r["doc_id"])
+        figures_mod.delete_document_assets(r["doc_id"], config)
         removed += 1
     for r in concept_orphans:
         store.delete_concept(r["concept_id"])

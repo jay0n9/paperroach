@@ -38,7 +38,12 @@ def main(argv: list[str] | None = None) -> int:
             cwd=work,
         )
         config = tomllib.loads((work / "kb.toml").read_text(encoding="utf-8"))
-        if config.get("embed_dim") != 1024 or config.get("ingester") != "pymupdf4llm":
+        if (
+            config.get("embed_dim") != 1024
+            or config.get("ingester") != "pymupdf4llm"
+            or config.get("figure_mode") != "off"
+            or config.get("figure_backend") != "docling"
+        ):
             raise RuntimeError("Installed wheel wrote an incomplete configuration template.")
     print(f"Wheel smoke test passed: {wheel.name}")
     return 0

@@ -31,13 +31,14 @@ def search(query: str, config: Config, k: int | None = None) -> list[dict]:
     k = config.rag_top_k if k is None else k
     if k < 1:
         raise ValueError(f"k must be at least 1 (got {k})")
-    if "chunks" not in store_mod.table_names(config):
+    names = store_mod.table_names(config)
+    if not ({"chunks", "figures"} & names):
         return []
     client = OllamaClient(config)
     store = store_mod.KBStore(config)
     client.unload_llm()  # a resident LLM (keep_alive) would co-reside on 8GB
     qvec = client.embed_one(query)
-    return store.search_chunks(qvec, k)
+    return _search_rows(store, qvec, k)
 
 
 def format_search_results(rows: list[dict]) -> str:
@@ -58,7 +59,8 @@ def ask(query: str, config: Config, k: int | None = None) -> dict:
     k = config.rag_top_k if k is None else k
     if k < 1:
         raise ValueError(f"k must be at least 1 (got {k})")
-    if "chunks" not in store_mod.table_names(config):
+    names = store_mod.table_names(config)
+    if not ({"chunks", "figures"} & names):
         return {
             "answer": "No relevant evidence was found in the knowledge library.",
             "sources": [],
@@ -69,7 +71,7 @@ def ask(query: str, config: Config, k: int | None = None) -> dict:
     # Embedder phase.
     client.unload_llm()  # a resident LLM (keep_alive) would co-reside on 8GB
     qvec = client.embed_one(query)
-    rows = store.search_chunks(qvec, k)
+    rows = _search_rows(store, qvec, k)
     client.unload_embed()  # free VRAM before the LLM loads
 
     if not rows:
@@ -88,6 +90,35 @@ def ask(query: str, config: Config, k: int | None = None) -> dict:
 
     sources = _dedupe_sources(rows)
     return {"answer": answer, "sources": sources, "chunks": rows}
+
+
+def _search_rows(store, query_vector: list[float], k: int) -> list[dict]:
+    """Merge prose and figure hits into one cosine-ranked result list."""
+    rows: list[dict] = []
+    try:
+        rows.extend(store.search_chunks(query_vector, k))
+    except Exception:
+        pass
+    try:
+        for row in store.search_figures(query_vector, k):
+            item = dict(row)
+            item["header"] = _figure_header(item)
+            item["source_type"] = "figure"
+            rows.append(item)
+    except Exception:
+        pass
+    rows.sort(key=lambda row: float(row.get("_distance", float("inf"))))
+    return rows[:k]
+
+
+def _figure_header(row: dict) -> str:
+    label = "Table" if row.get("source_kind") == "table" else "Figure"
+    index = row.get("figure_index") or "?"
+    page = row.get("page") or 0
+    figure_type = str(row.get("figure_type") or "").strip()
+    suffix = f" - {figure_type}" if figure_type else ""
+    location = f" (p. {page})" if page else ""
+    return f"{label} {index}{suffix}{location}"
 
 
 def _build_context(rows: list[dict]) -> str:

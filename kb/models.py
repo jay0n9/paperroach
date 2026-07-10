@@ -69,6 +69,58 @@ class Chunk:
 
 
 @dataclass
+class FigureAsset:
+    """A visual document element extracted from a source PDF.
+
+    ``staging_path`` exists only while a build is in progress. Once the note
+    is ready to be written it is moved to ``asset_path`` under the vault, which
+    gives Obsidian a stable, visible attachment target.
+    """
+
+    figure_id: str
+    index: int
+    page: int = 0
+    source_kind: str = "figure"  # "figure" | "table"
+    caption: str = ""
+    bbox: tuple[float, float, float, float] | None = None
+    image_sha256: str = ""
+    staging_path: Path | None = None
+    asset_path: Path | None = None
+    asset_relpath: str = ""
+    figure_type: str = ""
+    observed_facts: list[str] = field(default_factory=list)
+    interpretation: str = ""
+    research_evidence: list[str] = field(default_factory=list)
+    hci_signals: list[str] = field(default_factory=list)
+    visible_text: list[str] = field(default_factory=list)
+    uncertainties: list[str] = field(default_factory=list)
+    importance: str = "supporting"
+
+    @property
+    def block_id(self) -> str:
+        token = self.image_sha256[:12] or str(self.index)
+        return f"figure-{token}"
+
+    def searchable_text(self) -> str:
+        """Text embedded for figure-aware retrieval, without raw image bytes."""
+        label = f"Figure {self.index}" if self.source_kind == "figure" else f"Table {self.index}"
+        parts = [label]
+        if self.figure_type:
+            parts.append(f"Type: {self.figure_type}")
+        if self.caption:
+            parts.append(f"Caption: {self.caption}")
+        if self.observed_facts:
+            parts.append("Observed: " + "; ".join(self.observed_facts))
+        if self.interpretation:
+            parts.append(f"Interpretation: {self.interpretation}")
+        if self.research_evidence:
+            parts.append("Research evidence: " + "; ".join(self.research_evidence))
+        if self.hci_signals:
+            parts.append("HCI signals: " + "; ".join(self.hci_signals))
+        return "\n".join(parts)
+
+
+@dataclass
 class Document:
     """Everything we know about one input, threaded through both passes."""
 
@@ -100,6 +152,12 @@ class Document:
     # (populated when a math-aware ingester like nougat is used).
     equations: list[str] = field(default_factory=list)
     equations_integrated: bool = False  # equations woven into the Approach prose
+
+    # Extracted figures/tables, optionally enriched by a vision model.
+    figures: list[FigureAsset] = field(default_factory=list)
+    # False means extraction was disabled or failed, so renderers preserve an
+    # existing managed figure section instead of silently deleting it.
+    figures_synced: bool = False
 
 
 def doc_id_for(source_path: Path) -> str:

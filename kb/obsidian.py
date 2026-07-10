@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 
 from kb.config import Config
-from kb.models import Document, PaperAnalysis
+from kb.models import Document, FigureAsset, PaperAnalysis
 
 RELATED_START = "%% kb-related-start %%"
 RELATED_END = "%% kb-related-end %%"
@@ -318,6 +318,12 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
         out += ["## Key Equations", "", "_Extracted verbatim from the source._", ""]
         for eq in doc.equations:
             out += [f"$$\n{eq}\n$$", ""]
+    if doc.figures:
+        out += _render_figures(doc.figures)
+    elif not doc.figures_synced:
+        existing_figures = _existing_key_figures(doc.note_path)
+        if existing_figures:
+            out += [existing_figures, ""]
     if an.concepts:
         out += ["## Concepts", ""]
         out += [f"- {wikilink(c['name'])}" for c in an.concepts if c.get("name")]
@@ -337,6 +343,46 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
         out.append(f"- {meta.source_url}")
 
     return fix_inline_math("\n".join(out).rstrip() + "\n")
+
+
+def _render_figures(figures: list[FigureAsset]) -> list[str]:
+    """Render visual evidence without duplicating the original paper assets."""
+    out = ["## Key Figures", ""]
+    for figure in figures:
+        label = "Figure" if figure.source_kind == "figure" else "Table"
+        suffix = f" - {_figure_text(figure.figure_type)}" if figure.figure_type else ""
+        page = f" (p. {figure.page})" if figure.page else ""
+        out += [f"### {label} {figure.index}{suffix}{page}", ""]
+        if figure.asset_relpath:
+            out += [f"![[{figure.asset_relpath}|720]]", ""]
+        if figure.caption:
+            out += ["> [!quote] Original caption", f"> {_figure_text(figure.caption)}", ""]
+        if figure.observed_facts:
+            out += [f"**What it shows:** {_join_clauses(figure.observed_facts)}", ""]
+        if figure.interpretation:
+            out += [f"**Research relevance:** {_figure_text(figure.interpretation)}", ""]
+        if figure.research_evidence:
+            out += [f"**Evidence:** {_join_clauses(figure.research_evidence)}", ""]
+        if figure.hci_signals:
+            out += [f"**HCI signals:** {_join_clauses(figure.hci_signals)}", ""]
+        if figure.uncertainties:
+            out += [f"**Uncertainty:** {_join_clauses(figure.uncertainties)}", ""]
+        out += [f"^{figure.block_id}", ""]
+    return out
+
+
+def _figure_text(value: object) -> str:
+    """Keep model/caption fields inside their intended Markdown paragraph."""
+    return " ".join(str(value or "").split())
+
+
+def _existing_key_figures(note_path: Path | None) -> str:
+    """Preserve prior visual evidence when extraction is disabled or failed."""
+    if note_path is None or not note_path.exists():
+        return ""
+    text = _read_text_tolerant(note_path)
+    match = re.search(r"(?ms)^## Key Figures\n.*?(?=^## |\Z)", text)
+    return match.group(0).rstrip() if match else ""
 
 
 def _join_clauses(items: list[str]) -> str:

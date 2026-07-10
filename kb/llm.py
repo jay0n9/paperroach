@@ -236,8 +236,9 @@ def extract_analysis(
     markdown: str,
     metadata: PaperMetadata,
     config: Config,
+    visual_evidence: str = "",
 ) -> PaperAnalysis:
-    user = _build_analysis_prompt(markdown, metadata, config)
+    user = _build_analysis_prompt(markdown, metadata, config, visual_evidence)
     # Scale how many concepts we ask for with the paper's size: a survey
     # deserves more than a short workshop paper.
     n_max = min(8, 4 + len(markdown) // 60_000)
@@ -250,7 +251,12 @@ def extract_analysis(
     return _coerce_analysis(obj)
 
 
-def _build_analysis_prompt(markdown: str, metadata: PaperMetadata, config: Config) -> str:
+def _build_analysis_prompt(
+    markdown: str,
+    metadata: PaperMetadata,
+    config: Config,
+    visual_evidence: str = "",
+) -> str:
     head = _head(markdown, config.analysis_input_chars)
     outline = _outline(markdown)
     parts = [f"Paper title: {metadata.title}"]
@@ -260,6 +266,8 @@ def _build_analysis_prompt(markdown: str, metadata: PaperMetadata, config: Confi
         parts.append(f"Year: {metadata.year}")
     if outline:
         parts.append("Section outline:\n" + outline)
+    if visual_evidence:
+        parts.append(_document_block("Extracted visual evidence", visual_evidence))
     parts.append(_document_block("Paper content, truncated", head))
     parts.append("\nReturn the JSON analysis object now.")
     return "\n\n".join(parts)
@@ -309,6 +317,7 @@ def classify_paper(
     analysis: PaperAnalysis,
     config: Config,
     candidate_domains: list[str] | None = None,
+    visual_evidence: str = "",
 ) -> PaperClassification:
     """Classify the paper note's filing domain independently of concept folders."""
     candidates = sorted(set(taxonomy.domain_names()) | set(candidate_domains or []))
@@ -352,6 +361,12 @@ def classify_paper(
         )
     if outline:
         parts.append("Section outline:\n" + outline)
+    if visual_evidence:
+        parts.append(
+            _document_block(
+                "Extracted visual evidence (supporting evidence only)", visual_evidence
+            )
+        )
     parts.append(_document_block("Paper content, truncated", head))
     parts.append("\nReturn the classification JSON now.")
     obj = client.generate_json(system, "\n\n".join(parts))

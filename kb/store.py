@@ -67,6 +67,27 @@ def _concepts_schema(dim: int) -> pa.Schema:
     )
 
 
+def _figures_schema(dim: int) -> pa.Schema:
+    """Visual evidence indexed independently from prose chunks."""
+    return pa.schema(
+        [
+            pa.field("figure_id", pa.string()),
+            pa.field("doc_id", pa.string()),
+            pa.field("note_path", pa.string()),
+            pa.field("title", pa.string()),
+            pa.field("figure_index", pa.int32()),
+            pa.field("page", pa.int32()),
+            pa.field("source_kind", pa.string()),
+            pa.field("asset_path", pa.string()),
+            pa.field("caption", pa.string()),
+            pa.field("figure_type", pa.string()),
+            pa.field("importance", pa.string()),
+            pa.field("text", pa.string()),
+            pa.field("vector", pa.list_(pa.float32(), dim)),
+        ]
+    )
+
+
 def _store_meta_path(config: Config) -> Path:
     return config.kb_path / _META_NAME
 
@@ -152,6 +173,15 @@ def row_counts(config: Config) -> tuple[int, int]:
     return n_docs, n_chunks
 
 
+def figure_count(config: Config) -> int:
+    """Read indexed figure count without creating a new store."""
+    validate_store_meta(config)
+    if "figures" not in table_names(config):
+        return 0
+    db = lancedb.connect(str(config.kb_path))
+    return db.open_table("figures").count_rows()
+
+
 class KBStore:
     def __init__(self, config: Config):
         self.config = config
@@ -162,6 +192,9 @@ class KBStore:
         self.docs = self._open_or_create("docs", _docs_schema(config.embed_dim))
         self.concepts = self._open_or_create(
             "concepts", _concepts_schema(config.embed_dim)
+        )
+        self.figures = self._open_or_create(
+            "figures", _figures_schema(config.embed_dim)
         )
         self._save_store_meta()
 
@@ -261,6 +294,15 @@ class KBStore:
             .to_list()
         )
 
+    def search_figures(self, query_vector: list[float], k: int) -> list[dict]:
+        """Retrieve figure evidence using the same text embedding space."""
+        return (
+            self.figures.search(query_vector)
+            .metric("cosine")
+            .limit(k)
+            .to_list()
+        )
+
     def related_for_vector(
         self, query_vector: list[float], exclude_doc_id: str, k: int
     ) -> list[dict]:
@@ -292,7 +334,7 @@ class KBStore:
     # ── maintenance ─────────────────────────────────────────────────
     def update_note_path(self, doc_id: str, note_path: str) -> None:
         """Point a document's rows at a moved note file (used by `paperroach refile`)."""
-        for table in (self.docs, self.chunks):
+        for table in (self.docs, self.chunks, self.figures):
             table.update(
                 where=f"doc_id = '{doc_id}'", values={"note_path": note_path}
             )
@@ -301,6 +343,7 @@ class KBStore:
         """Remove a document and all its chunks (used by `paperroach gc`)."""
         self._delete(self.chunks, doc_id)
         self._delete(self.docs, doc_id)
+        self._delete(self.figures, doc_id)
 
     def delete_concept(self, concept_id: str) -> None:
         self.concepts.delete(f"concept_id = '{concept_id}'")
@@ -311,7 +354,7 @@ class KBStore:
         delete+add churn (every rebuild / watch cycle) accumulates fragments
         and versions that slow scans and grow the store on disk.
         """
-        for table in (self.chunks, self.docs, self.concepts):
+        for table in (self.chunks, self.docs, self.concepts, self.figures):
             try:
                 table.optimize()
             except Exception:
@@ -346,6 +389,37 @@ class KBStore:
 
     def concept_count(self) -> int:
         return self.concepts.count_rows()
+
+    # -- figures ------------------------------------------------------------
+    def replace_figures(self, doc: Document, figure_vectors: list[list[float]]) -> None:
+        """Replace one document's figure rows after its prose rows are stored."""
+        if len(doc.figures) != len(figure_vectors):
+            raise ValueError(
+                f"Expected {len(doc.figures)} figure vector(s), got {len(figure_vectors)}."
+            )
+        self._delete(self.figures, doc.doc_id)
+        note_path = str(doc.note_path) if doc.note_path else ""
+        rows = []
+        for figure, vector in zip(doc.figures, figure_vectors):
+            rows.append(
+                {
+                    "figure_id": figure.figure_id,
+                    "doc_id": doc.doc_id,
+                    "note_path": note_path,
+                    "title": doc.metadata.title,
+                    "figure_index": figure.index,
+                    "page": figure.page,
+                    "source_kind": figure.source_kind,
+                    "asset_path": figure.asset_relpath,
+                    "caption": figure.caption,
+                    "figure_type": figure.figure_type,
+                    "importance": figure.importance,
+                    "text": figure.searchable_text(),
+                    "vector": vector,
+                }
+            )
+        if rows:
+            self.figures.add(rows)
 
 
 def _table_names(db) -> set[str]:

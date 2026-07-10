@@ -53,6 +53,8 @@ Obsidian notes, concept notes, tags, related-paper links
 ```bash
 ollama pull qwen3:8b
 ollama pull bge-m3
+# Optional, for figure_mode = "describe"
+ollama pull qwen2.5vl:7b
 ```
 
 ## Install
@@ -112,15 +114,17 @@ paperroach build paper1.pdf paper2.pdf "C:/notes"
 For each input, PaperRoach:
 
 1. Extracts Markdown from the source.
-2. Extracts metadata and paper analysis with the LLM.
-3. Classifies the paper by contribution domain.
-4. Distills concepts and drafts concept-note content.
-5. Chunks the document.
-6. Unloads the LLM and loads the embedding model.
-7. Embeds chunks and summary text.
-8. Finds related papers from the existing store and writes paper/source notes.
-9. Commits successfully written documents to LanceDB and creates concept notes.
-10. Saves the content-hash ledger and refreshes related-paper links.
+2. Optionally extracts figures into vault-visible assets and describes them with
+   a local vision model.
+3. Extracts metadata and paper analysis with the LLM.
+4. Classifies the paper by contribution domain.
+5. Distills concepts and drafts concept-note content.
+6. Chunks the document.
+7. Unloads the LLM and loads the embedding model.
+8. Embeds prose chunks, summaries, and figure evidence.
+9. Finds related papers from the existing store and writes paper/source notes.
+10. Commits successfully written documents to LanceDB and creates concept notes.
+11. Saves the content-hash ledger and refreshes related-paper links.
 
 PDFs become generated paper notes under:
 
@@ -331,6 +335,43 @@ Or per command:
 paperroach build "paper.pdf" --ingester nougat
 ```
 
+## Figure-Aware Parsing
+
+Figure enrichment is opt-in. In `extract` mode PaperRoach saves useful figure
+crops and captions; `describe` additionally analyzes each crop with a local
+vision model. Assets live under `Assets/PaperRoach/<doc-id>/`, generated paper
+notes receive a `## Key Figures` section, and visual evidence is searchable
+alongside prose chunks.
+
+```bash
+pip install -e ".[docling]"
+ollama pull qwen2.5vl:7b
+paperroach build "paper.pdf" --figure-mode describe
+# Fully offline embedded-image extraction:
+paperroach build "paper.pdf" --figure-mode extract --figure-backend pymupdf
+```
+
+```toml
+figure_mode = "describe"       # off | extract | describe
+figure_backend = "docling"     # docling | pymupdf
+vision_model = "qwen2.5vl:7b"
+figure_assets_dir = "Assets/PaperRoach"
+figure_max_per_paper = 12
+figure_min_area_ratio = 0.02
+```
+
+`docling` is the preferred layout-aware backend: it can associate pictures,
+tables, captions, and page geometry. Its first use may need locally cached
+model artifacts. `pymupdf` is a fast offline fallback for PDFs that contain
+embedded raster images; it cannot reliably recover vector-only diagrams or
+complex table structure. Figure descriptions are supporting evidence for paper
+analysis and HCI classification, never a source for bibliographic metadata.
+
+PaperRoach loads the vision model, then unloads it before the text LLM and
+embedder run, so the three models do not co-reside on an 8 GB GPU. Figure crops
+remain in the local vault; do not commit PDFs or extracted assets from
+copyrighted papers to the project repository.
+
 ## Project Layout
 
 ```text
@@ -339,6 +380,7 @@ kb/
   templates/          packaged `paperroach init` configuration template
   pipeline.py        build, watch, relink, refile, retag, gc
   ingest.py          PDF / Markdown ingestion
+  figures.py         figure crops, vision evidence, and vault assets
   llm.py             LLM prompts and JSON coercion
   taxonomy.py        paper-domain taxonomy and heuristic fallback
   obsidian.py        generated notes and managed blocks

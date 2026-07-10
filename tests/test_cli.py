@@ -46,6 +46,33 @@ class CLITests(unittest.TestCase):
 
             self.assertEqual(config.embed_dim, 3)
 
+    def test_figure_cli_overrides(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = Path.cwd()
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            try:
+                os.chdir(root)
+                args = build_parser().parse_args(
+                    [
+                        "build",
+                        "paper.pdf",
+                        "--vault",
+                        str(vault),
+                        "--figure-mode",
+                        "describe",
+                        "--vision-model",
+                        "qwen2.5vl:7b",
+                    ]
+                )
+                config = cli._config_from_args(args)
+            finally:
+                os.chdir(cwd)
+
+            self.assertEqual(config.figure_mode, "describe")
+            self.assertEqual(config.vision_model, "qwen2.5vl:7b")
+
     def test_pyproject_version_matches_runtime_version(self):
         pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
         data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
@@ -71,6 +98,7 @@ class CLITests(unittest.TestCase):
             config_data = tomllib.loads(config_path.read_text(encoding="utf-8"))
             self.assertEqual(config_data["embed_dim"], 1024)
             self.assertEqual(config_data["ingester"], "pymupdf4llm")
+            self.assertEqual(config_data["figure_mode"], "off")
             self.assertTrue((vault / "References").exists())
             self.assertIn("Wrote", stdout.getvalue())
 

@@ -28,6 +28,24 @@ def _add_common(p: argparse.ArgumentParser) -> None:
         "--embed-dim", dest="embed_dim", type=int, help="Embedding vector dimension"
     )
     p.add_argument("--ollama-host", dest="ollama_host", help="Ollama base URL")
+    p.add_argument(
+        "--figure-mode",
+        dest="figure_mode",
+        choices=("off", "extract", "describe"),
+        help="PDF figure handling: off | extract | describe (vision model)",
+    )
+    p.add_argument(
+        "--figure-backend",
+        dest="figure_backend",
+        choices=("docling", "pymupdf"),
+        help="Figure extractor: docling (layout-aware) | pymupdf (offline raster)",
+    )
+    p.add_argument("--vision-model", dest="vision_model", help="Ollama vision model tag")
+    p.add_argument(
+        "--figure-assets-dir",
+        dest="figure_assets_dir",
+        help="Vault-relative directory for extracted figure images",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -206,6 +224,10 @@ _OVERRIDE_KEYS = (
     "zotero_dir",
     "watch_interval",
     "ingester",
+    "figure_mode",
+    "figure_backend",
+    "vision_model",
+    "figure_assets_dir",
 )
 
 
@@ -268,6 +290,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     print("\nNext:")
     print("  ollama pull qwen3:8b")
     print("  ollama pull bge-m3")
+    print("  # Optional figure descriptions: ollama pull qwen2.5vl:7b")
     print('  paperroach build "path/to/paper.pdf"')
     return 0
 
@@ -477,12 +500,15 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
     config = _config_from_args(args)
     n_docs, n_chunks = store_mod.row_counts(config)
+    n_figures = store_mod.figure_count(config)
     print(f"Vault       : {config.vault_path}")
     print(f"Store       : {config.kb_path}")
     print(f"Documents   : {n_docs}")
     print(f"Chunks      : {n_chunks}")
+    print(f"Figures     : {n_figures} indexed ({config.figure_mode})")
     print(f"LLM model   : {config.llm_model}")
     print(f"Embed model : {config.embed_model} ({config.embed_dim}-dim)")
+    print(f"Vision model: {config.vision_model}")
     return 0
 
 
@@ -532,6 +558,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 ok("Store", f"{n_docs} document(s), {n_chunks} chunk(s)")
         except Exception as exc:
             fail("Store", str(exc))
+
+    if config.figure_mode != "off":
+        try:
+            if config.figure_backend == "docling":
+                import docling  # noqa: F401
+            else:
+                import pymupdf  # noqa: F401
+
+            ok("Figures", f"{config.figure_mode} via {config.figure_backend}")
+        except ModuleNotFoundError:
+            dependency = "Docling" if config.figure_backend == "docling" else "PyMuPDF"
+            fail("Figures", f"{dependency} missing; install PaperRoach dependencies")
 
     data_dir = zotero.find_data_dir(config)
     if data_dir is None:
