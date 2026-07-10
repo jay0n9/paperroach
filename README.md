@@ -341,7 +341,9 @@ Figure enrichment is opt-in. In `extract` mode PaperRoach saves useful figure
 crops and captions; `describe` additionally analyzes each crop with a local
 vision model. Assets live under `Assets/PaperRoach/<doc-id>/`, generated paper
 notes receive a `## Key Figures` section, and visual evidence is searchable
-alongside prose chunks.
+alongside prose chunks. New paper notes also add a compact `## Visual Synthesis`
+section after Key Results, with up to three figure-grounded findings and inline
+previews that connect visual evidence to the study summary.
 
 ```bash
 pip install -e ".[docling]"
@@ -364,6 +366,20 @@ paperroach enrich-figures --figure-mode describe --figure-backend pymupdf --appl
 Use `--limit N` to process a smaller batch. Papers with indexed figures are
 skipped by default; add `--force` to refresh them. The default command is a dry
 run; only `--apply` writes assets, notes, and LanceDB figure rows.
+
+For notes that already have indexed figures, weave that evidence into the
+existing study summary without re-ingesting the PDF or rewriting the rest of
+the note:
+
+```bash
+paperroach integrate-figures
+paperroach integrate-figures --apply
+```
+
+This creates or refreshes only `## Visual Synthesis`, preserves `## My Notes`,
+and skips notes already integrated unless `--force` is supplied. The synthesis
+uses only indexed figure descriptions and captions; papers whose visual assets
+do not support a grounded claim are left unchanged.
 
 When a PDF exposes a figure as many small image tiles rather than one large
 embedded crop, the PyMuPDF backend can render the compound page visual as a

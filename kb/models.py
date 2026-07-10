@@ -37,6 +37,9 @@ class PaperAnalysis:
     problem_motivation: str = ""
     approach: str = ""  # may contain Markdown subsections/bullets
     key_results: str = ""
+    # Figure-grounded findings rendered inside the study note, each shaped as
+    # {"figure_index": int, "finding": str, "connection": str}.
+    visual_synthesis: list[dict] = field(default_factory=list)
     contributions: list[str] = field(default_factory=list)
     strengths: list[str] = field(default_factory=list)
     limitations: list[str] = field(default_factory=list)

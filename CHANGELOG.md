@@ -19,6 +19,8 @@ release. Follow semantic versioning and keep entries short enough to scan.
   and LanceDB figure retrieval.
 - `paperroach enrich-figures` to backfill visual evidence into existing
   generated paper notes without rerunning full paper analysis.
+- `paperroach integrate-figures` to weave indexed figure evidence into a
+  managed `## Visual Synthesis` section while preserving existing note content.
 
 ### Changed
 

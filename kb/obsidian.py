@@ -39,6 +39,11 @@ _INLINE_MATH = re.compile(r"(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)")
 
 _MATH_CHARS = set("\\^_={}")
 _KEY_FIGURES_RE = re.compile(r"(?ms)^## Key Figures\n.*?(?=^## |\Z)")
+_VISUAL_SYNTHESIS_RE = re.compile(r"(?ms)^## Visual Synthesis\n.*?(?=^## |\Z)")
+_SUMMARY_BOUNDARY_RE = re.compile(
+    r"(?m)^## (?:Visual Synthesis|Key Figures|Key Equations|Concepts|Concept Map|"
+    r"Related Papers|My Notes)\b|^# References\b"
+)
 
 
 def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -300,6 +305,12 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
         out += ["## Approach", "", an.approach, ""]
     if an.key_results:
         out += ["## Key Results", "", an.key_results, ""]
+    if an.visual_synthesis:
+        out += _render_visual_synthesis(an.visual_synthesis, doc.figures)
+    else:
+        existing_visual_synthesis = _existing_visual_synthesis(doc.note_path)
+        if existing_visual_synthesis:
+            out += [existing_visual_synthesis, ""]
     if an.contributions:
         out += ["## Contributions", ""] + [f"- {c}" for c in an.contributions] + [""]
     if an.strengths or an.limitations:
@@ -346,6 +357,43 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
     return fix_inline_math("\n".join(out).rstrip() + "\n")
 
 
+def _render_visual_synthesis(
+    synthesis: list[dict], figures: list[FigureAsset]
+) -> list[str]:
+    """Render a compact, figure-grounded section inside the study summary."""
+    by_index = {figure.index: figure for figure in figures}
+    items: list[tuple[FigureAsset, str, str]] = []
+    seen_indices: set[int] = set()
+    for item in synthesis:
+        if not isinstance(item, dict):
+            continue
+        try:
+            figure_index = int(item.get("figure_index"))
+        except (TypeError, ValueError):
+            continue
+        figure = by_index.get(figure_index)
+        finding = _figure_text(item.get("finding"))
+        connection = _figure_text(item.get("connection"))
+        if figure is None or figure_index in seen_indices or not finding or not connection:
+            continue
+        items.append((figure, finding, connection))
+        seen_indices.add(figure_index)
+        if len(items) >= 3:
+            break
+    if not items:
+        return []
+
+    out = ["## Visual Synthesis", ""]
+    for figure, finding, connection in items:
+        label = "Figure" if figure.source_kind == "figure" else "Table"
+        page = f" (p. {figure.page})" if figure.page else ""
+        out += [f"### {label} {figure.index}{page}", ""]
+        if figure.asset_relpath:
+            out += [f"![[{figure.asset_relpath}|420]]", ""]
+        out += [finding, "", f"**Connection to the study note:** {connection}", ""]
+    return out
+
+
 def _render_figures(figures: list[FigureAsset]) -> list[str]:
     """Render visual evidence without duplicating the original paper assets."""
     out = ["## Key Figures", ""]
@@ -384,6 +432,30 @@ def _existing_key_figures(note_path: Path | None) -> str:
     text = _read_text_tolerant(note_path)
     match = _KEY_FIGURES_RE.search(text)
     return match.group(0).rstrip() if match else ""
+
+
+def _existing_visual_synthesis(note_path: Path | None) -> str:
+    """Return the managed visual-synthesis section from an existing note."""
+    if note_path is None or not note_path.exists():
+        return ""
+    match = _VISUAL_SYNTHESIS_RE.search(_read_text_tolerant(note_path))
+    return match.group(0).rstrip() if match else ""
+
+
+def has_visual_synthesis(path: Path) -> bool:
+    """True when a generated note already contains visual synthesis."""
+    return path.exists() and _VISUAL_SYNTHESIS_RE.search(_read_text_tolerant(path)) is not None
+
+
+def generated_summary_context(path: Path) -> str:
+    """Return generated study prose while excluding personal and visual sections."""
+    if not path.exists():
+        return ""
+    _frontmatter, body = split_frontmatter(_read_text_tolerant(path))
+    boundary = _SUMMARY_BOUNDARY_RE.search(body)
+    if boundary:
+        body = body[: boundary.start()]
+    return body.strip()
 
 
 def _join_clauses(items: list[str]) -> str:
@@ -587,6 +659,42 @@ def update_figures_in_file(path: Path, figures: list[FigureAsset]) -> bool:
         # Keep figures near generated analysis, before concepts, related work,
         # personal notes, or references when any of those sections exists.
         boundary = re.search(
+            r"(?m)^## (?:Concepts|Related Papers|My Notes)\b|^# References\b",
+            original,
+        )
+        if boundary:
+            prefix = original[:boundary.start()].rstrip()
+            suffix = original[boundary.start():]
+            updated = f"{prefix}\n\n{section}\n\n{suffix}"
+        else:
+            updated = original.rstrip() + f"\n\n{section}\n"
+    if updated != original:
+        write_text_atomic(path, updated)
+        return True
+    return False
+
+
+def update_visual_synthesis_in_file(
+    path: Path, synthesis: list[dict], figures: list[FigureAsset]
+) -> bool:
+    """Insert or replace only the managed visual-synthesis section of a note."""
+    if not path.exists() or not synthesis or not figures:
+        return False
+    section_lines = _render_visual_synthesis(synthesis, figures)
+    if not section_lines:
+        return False
+    original = _read_text_tolerant(path)
+    section = "\n".join(section_lines).strip()
+    match = _VISUAL_SYNTHESIS_RE.search(original)
+    if match:
+        updated = (
+            original[:match.start()]
+            + section
+            + "\n\n"
+            + original[match.end():].lstrip()
+        )
+    else:
+        boundary = _KEY_FIGURES_RE.search(original) or re.search(
             r"(?m)^## (?:Concepts|Related Papers|My Notes)\b|^# References\b",
             original,
         )

@@ -29,6 +29,58 @@ class LLMClassificationTests(unittest.TestCase):
         self.assertIn("&lt;instruction&gt;", block)
         self.assertEqual(block.count("</document>"), 1)
 
+    def test_visual_synthesis_uses_only_allowed_figure_indices(self):
+        client = PromptCaptureClient(
+            {
+                "visual_synthesis": [
+                    {
+                        "figure_index": 1,
+                        "finding": "The figure shows an interaction workflow.",
+                        "connection": "It makes the proposed flow concrete.",
+                    },
+                    {
+                        "figure_index": 99,
+                        "finding": "This must be ignored.",
+                        "connection": "This must be ignored too.",
+                    },
+                ]
+            }
+        )
+        config = type(
+            "ConfigStub", (), {"note_language": "English", "analysis_input_chars": 8000}
+        )()
+
+        synthesis = llm.synthesize_visual_summary(
+            client,
+            "Visual Paper",
+            "The study proposes a workflow.",
+            "Figure 1: Caption: a prototype workflow.",
+            [1],
+            config,
+        )
+
+        self.assertEqual(len(synthesis), 1)
+        self.assertEqual(synthesis[0]["figure_index"], 1)
+        self.assertIn("Allowed figure indices: 1", client.user)
+        self.assertIn("Existing generated study summary", client.user)
+
+    def test_analysis_coerces_visual_synthesis_for_new_builds(self):
+        analysis = llm._coerce_analysis(
+            {
+                "tl_dr": "A visual paper.",
+                "visual_synthesis": [
+                    {
+                        "figure_index": 2,
+                        "finding": "A comparison chart is visible.",
+                        "connection": "It supports the reported result.",
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(analysis.tl_dr, "A visual paper.")
+        self.assertEqual(analysis.visual_synthesis[0]["figure_index"], 2)
+
     def test_metadata_extraction_preserves_explicit_domain_fields(self):
         metadata = llm._coerce(
             {

@@ -3,6 +3,7 @@
     paperroach init                 scaffold kb.toml + vault folders
     paperroach build <paths...>     run the full pipeline (PASS A → swap → PASS B)
     paperroach enrich-figures       add visual evidence to existing paper notes
+    paperroach integrate-figures    weave indexed figures into existing study notes
     paperroach search "<query>"     semantic search over chunks
     paperroach ask "<query>"        RAG answer grounded in your library
     paperroach relink               recompute related-literature wikilinks
@@ -104,6 +105,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_common(p_figures)
     p_figures.set_defaults(func=cmd_enrich_figures)
+
+    p_integrate_figures = sub.add_parser(
+        "integrate-figures",
+        help="Weave indexed figure evidence into existing generated study notes",
+    )
+    p_integrate_figures.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually write Visual Synthesis sections (default: dry run)",
+    )
+    p_integrate_figures.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process at most this many eligible notes",
+    )
+    p_integrate_figures.add_argument(
+        "--force",
+        action="store_true",
+        help="Recreate Visual Synthesis sections that already exist",
+    )
+    _add_common(p_integrate_figures)
+    p_integrate_figures.set_defaults(func=cmd_integrate_figures)
 
     p_search = sub.add_parser("search", help="Semantic search over chunks")
     p_search.add_argument("query")
@@ -347,6 +371,22 @@ def cmd_enrich_figures(args: argparse.Namespace) -> int:
 
     if args.apply:
         return _run_locked(config, "enrich-figures", run)
+    return run()
+
+
+def cmd_integrate_figures(args: argparse.Namespace) -> int:
+    from kb import pipeline
+
+    config = _config_from_args(args)
+
+    def run() -> int:
+        pipeline.integrate_figures(
+            config, apply=args.apply, limit=args.limit, force=args.force
+        )
+        return 0
+
+    if args.apply:
+        return _run_locked(config, "integrate-figures", run)
     return run()
 
 

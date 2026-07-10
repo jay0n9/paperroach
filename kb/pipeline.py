@@ -40,6 +40,7 @@ from kb.llm import (
     extract_metadata,
     metadata_classification,
     normalize_concept_key,
+    synthesize_visual_summary,
     write_concept_article,
     write_integrated_approach,
 )
@@ -53,7 +54,13 @@ from kb.models import (
     doc_id_for,
 )
 from kb.ollama_client import OllamaClient, OllamaError
-from kb.store import KBStore, document_rows, figure_doc_ids, table_names
+from kb.store import (
+    KBStore,
+    document_rows,
+    figure_doc_ids,
+    indexed_figure_rows,
+    table_names,
+)
 
 
 def _log(msg: str) -> None:
@@ -851,6 +858,212 @@ def enrich_figures(
         "blocked": len(blocked),
         "already_indexed": already_indexed,
     }
+
+
+def integrate_figures(
+    config: Config, apply: bool = False, limit: int | None = None, force: bool = False
+) -> dict:
+    """Weave indexed visual evidence into existing generated study notes.
+
+    This is deliberately separate from figure extraction: it reuses the
+    reviewed figure descriptions already stored in LanceDB and changes only
+    the managed ``## Visual Synthesis`` section. Existing analysis and user
+    content remain intact.
+    """
+    if limit is not None and limit < 1:
+        raise ValueError(f"limit must be at least 1 (got {limit})")
+
+    candidates, blocked, already_integrated = _visual_synthesis_candidates(
+        config, force=force
+    )
+    if limit is not None:
+        candidates = candidates[:limit]
+    _log(
+        f"Visual-summary integration: {len(candidates)} eligible note(s), "
+        f"{already_integrated} already integrated, {len(blocked)} blocked."
+    )
+    for row, _note, _figure_rows in candidates[:8]:
+        _log(f"  - {row.get('title') or row['doc_id']}")
+    if len(candidates) > 8:
+        _log(f"  ... and {len(candidates) - 8} more")
+    for title, reason in blocked[:5]:
+        _log(f"  ! skipped {title}: {reason}")
+    if not apply:
+        _log("Dry run -- nothing changed. Re-run with --apply to integrate figures.")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_integrated": already_integrated,
+        }
+    if not candidates:
+        return {
+            "eligible": 0,
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_integrated": already_integrated,
+        }
+
+    client = OllamaClient(config)
+    try:
+        client.ping()
+    except OllamaError as exc:
+        _log(f"  ! {exc}")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_integrated": already_integrated,
+        }
+
+    client.unload_embed()
+    client.unload_vision()
+    updated = 0
+    no_synthesis = 0
+    try:
+        for index, (row, note, rows) in enumerate(candidates, 1):
+            title = str(row.get("title") or row["doc_id"])
+            _log(f"  [{index}/{len(candidates)}] synthesizing {title}")
+            figures = _figure_assets_from_index(rows)
+            summary = obsidian.generated_summary_context(note)
+            visual_evidence = _figure_evidence_from_index(rows)
+            try:
+                synthesis = synthesize_visual_summary(
+                    client,
+                    title,
+                    summary,
+                    visual_evidence,
+                    [figure.index for figure in figures],
+                    config,
+                )
+            except Exception as exc:
+                _log(f"      ! visual synthesis failed: {exc}")
+                continue
+            if not synthesis:
+                no_synthesis += 1
+                _log("      ! no sufficiently grounded visual synthesis returned")
+                continue
+            if obsidian.update_visual_synthesis_in_file(note, synthesis, figures):
+                updated += 1
+                _log(f"      · integrated {len(synthesis)} figure-grounded finding(s)")
+            else:
+                _log("      ! visual synthesis could not be written safely")
+    finally:
+        client.unload_llm()
+
+    _log(
+        f"Visual-summary integration complete: {updated} note(s) updated; "
+        f"{no_synthesis} note(s) had no grounded findings."
+    )
+    return {
+        "eligible": len(candidates),
+        "updated": updated,
+        "blocked": len(blocked),
+        "already_integrated": already_integrated,
+        "no_synthesis": no_synthesis,
+    }
+
+
+def _visual_synthesis_candidates(
+    config: Config, force: bool = False
+) -> tuple[list[tuple[dict, Path, list[dict]]], list[tuple[str, str]], int]:
+    """Find generated PDF notes with indexed figures but no visual synthesis."""
+    figure_rows = indexed_figure_rows(
+        config,
+        columns=[
+            "doc_id",
+            "figure_id",
+            "figure_index",
+            "page",
+            "source_kind",
+            "asset_path",
+            "caption",
+            "figure_type",
+            "importance",
+            "text",
+        ],
+    )
+    by_doc_id: dict[str, list[dict]] = {}
+    for figure_row in figure_rows:
+        by_doc_id.setdefault(str(figure_row.get("doc_id") or ""), []).append(figure_row)
+
+    candidates: list[tuple[dict, Path, list[dict]]] = []
+    blocked: list[tuple[str, str]] = []
+    already_integrated = 0
+    for row in document_rows(
+        config, columns=["doc_id", "title", "kind", "note_path"]
+    ):
+        if row.get("kind") != "pdf":
+            continue
+        title = str(row.get("title") or row["doc_id"])
+        note_value = str(row.get("note_path") or "").strip()
+        note = Path(note_value) if note_value else None
+        if note is None or not note.exists():
+            blocked.append((title, "generated note is missing"))
+            continue
+        if not obsidian.is_generated_note(note):
+            blocked.append((title, "note is not PaperRoach-generated"))
+            continue
+        rows = sorted(
+            by_doc_id.get(str(row["doc_id"]), []),
+            key=_indexed_figure_index,
+        )
+        if not rows:
+            blocked.append((title, "indexed figures are unavailable"))
+            continue
+        if not force and obsidian.has_visual_synthesis(note):
+            already_integrated += 1
+            continue
+        if not obsidian.generated_summary_context(note):
+            blocked.append((title, "generated study summary is unavailable"))
+            continue
+        missing_assets = [
+            str(item.get("asset_path") or "")
+            for item in rows
+            if not str(item.get("asset_path") or "")
+            or not (config.vault_path / str(item.get("asset_path") or "")).is_file()
+        ]
+        if missing_assets:
+            blocked.append((title, "one or more indexed figure assets are missing"))
+            continue
+        candidates.append((row, note, rows))
+    return candidates, blocked, already_integrated
+
+
+def _indexed_figure_index(row: dict) -> int:
+    """Return a safe figure index for ordering partially corrupted store rows."""
+    try:
+        return int(row.get("figure_index") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _figure_assets_from_index(rows: list[dict]) -> list[FigureAsset]:
+    """Rehydrate the fields needed to render indexed figures inside a note."""
+    figures: list[FigureAsset] = []
+    for row in rows:
+        figure_index = _indexed_figure_index(row)
+        if figure_index < 1:
+            continue
+        figures.append(
+            FigureAsset(
+                figure_id=str(row.get("figure_id") or f"figure:{figure_index}"),
+                index=figure_index,
+                page=int(row.get("page") or 0),
+                source_kind=str(row.get("source_kind") or "figure"),
+                caption=str(row.get("caption") or ""),
+                asset_relpath=str(row.get("asset_path") or ""),
+                figure_type=str(row.get("figure_type") or ""),
+                importance=str(row.get("importance") or "supporting"),
+            )
+        )
+    return sorted(figures, key=lambda figure: figure.index)
+
+
+def _figure_evidence_from_index(rows: list[dict]) -> str:
+    """Bound indexed figure evidence before it becomes an LLM input."""
+    blocks = [str(row.get("text") or "").strip() for row in rows]
+    return "\n\n".join(block for block in blocks if block)[:6000]
 
 
 def _figure_backfill_candidates(

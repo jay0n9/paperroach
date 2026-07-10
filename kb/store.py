@@ -182,6 +182,37 @@ def figure_count(config: Config) -> int:
     return db.open_table("figures").count_rows()
 
 
+def indexed_figure_rows(
+    config: Config, columns: list[str] | None = None
+) -> list[dict]:
+    """Read indexed figure metadata without loading vector payloads by default."""
+    validate_store_meta(config)
+    if "figures" not in table_names(config):
+        return []
+    db = lancedb.connect(str(config.kb_path))
+    table = db.open_table("figures")
+    if table.count_rows() == 0:
+        return []
+    data = table.to_arrow()
+    if columns is None:
+        columns = [
+            "figure_id",
+            "doc_id",
+            "note_path",
+            "title",
+            "figure_index",
+            "page",
+            "source_kind",
+            "asset_path",
+            "caption",
+            "figure_type",
+            "importance",
+            "text",
+        ]
+    data = data.select(columns)
+    return data.to_pylist()
+
+
 def document_rows(config: Config, columns: list[str] | None = None) -> list[dict]:
     """Read document metadata without creating missing LanceDB tables."""
     validate_store_meta(config)

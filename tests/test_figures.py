@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from kb import figures, obsidian, pipeline, rag
 from kb.config import Config
-from kb.models import Chunk, Document, FigureAsset, PaperMetadata
+from kb.models import Chunk, Document, FigureAsset, PaperAnalysis, PaperMetadata
 from kb.store import KBStore
 
 
@@ -123,6 +123,36 @@ class FakeBackfillClient:
 
     def embed(self, texts):
         return [[1.0, 0.0] for _ in texts]
+
+
+class FakeVisualSynthesisClient:
+    def __init__(self, config):
+        self.config = config
+        self.calls = []
+
+    def ping(self):
+        return None
+
+    def unload_llm(self):
+        return None
+
+    def unload_embed(self):
+        return None
+
+    def unload_vision(self):
+        return None
+
+    def generate_json(self, system, user):
+        self.calls.append((system, user))
+        return {
+            "visual_synthesis": [
+                {
+                    "figure_index": 1,
+                    "finding": "The prototype exposes a two-panel personalization workflow.",
+                    "connection": "It makes the interaction flow discussed in the summary concrete.",
+                }
+            ]
+        }
 
 
 class FigurePipelineTests(unittest.TestCase):
@@ -255,12 +285,24 @@ class FigurePipelineTests(unittest.TestCase):
                 kind="pdf",
                 markdown="# Paper",
                 metadata=PaperMetadata(title="Visual Paper", year=2026),
+                analysis=PaperAnalysis(
+                    visual_synthesis=[
+                        {
+                            "figure_index": 1,
+                            "finding": "The image shows a two-panel interaction flow.",
+                            "connection": "It makes the proposed workflow concrete.",
+                        }
+                    ]
+                ),
                 figures=[figure],
                 figures_synced=True,
             )
             doc.note_path = config.references_path / "Visual Paper (2026).md"
 
             rendered = obsidian.render_note(doc, [], config)
+            self.assertIn("## Visual Synthesis", rendered)
+            self.assertIn("![[Assets/PaperRoach/doc/figure-p002-abc.png|420]]", rendered)
+            self.assertLess(rendered.index("## Visual Synthesis"), rendered.index("## Key Figures"))
             self.assertIn("## Key Figures", rendered)
             self.assertIn("![[Assets/PaperRoach/doc/figure-p002-abc.png|720]]", rendered)
             self.assertIn("^figure-abc", rendered)
@@ -447,6 +489,71 @@ class FigurePipelineTests(unittest.TestCase):
             self.assertIn("## Key Figures", rendered)
             self.assertIn("Keep this personal observation.", rendered)
             self.assertEqual(KBStore(config).figures.count_rows(), 1)
+
+    def test_visual_summary_backfill_preserves_existing_note_content(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = self._config(root, embed_dim=2)
+            source = root / "visual.pdf"
+            source.write_bytes(b"%PDF-1.4\n")
+            note = config.references_path / "Visual Summary Paper (2024).md"
+            note.write_text(
+                "---\n"
+                "kb-generated: true\n"
+                f"kb-source: {source}\n"
+                "---\n"
+                "# Visual Summary Paper\n\n"
+                "## TL;DR\n\nExisting generated summary.\n\n"
+                "## Key Figures\n\nOriginal figure evidence.\n\n"
+                "## My Notes\n\nKeep this personal observation.\n\n"
+                "---\n# References\n",
+                encoding="utf-8",
+            )
+            asset = config.figure_assets_path / "visualsummary" / "figure-p002.png"
+            asset.parent.mkdir(parents=True)
+            asset.write_bytes(b"visual figure")
+            figure = FigureAsset(
+                figure_id="visualsummary:figure:one",
+                index=1,
+                page=2,
+                caption="Figure 1: A personalization prototype.",
+                image_sha256="one",
+                asset_relpath="Assets/PaperRoach/visualsummary/figure-p002.png",
+                figure_type="interface_screenshot",
+                observed_facts=["A two-panel workflow is visible."],
+                interpretation="The figure documents the proposed interaction.",
+            )
+            doc = Document(
+                doc_id="visualsummary",
+                source_path=source,
+                kind="pdf",
+                markdown="# Visual Summary Paper",
+                metadata=PaperMetadata(title="Visual Summary Paper", year=2024),
+                chunks=[Chunk(chunk_index=0, header="", text="Existing generated summary.")],
+                figures=[figure],
+                figures_synced=True,
+            )
+            doc.note_path = note
+            store = KBStore(config)
+            store.upsert_document(doc, [[1.0, 0.0]], [1.0, 0.0])
+            store.replace_figures(doc, [[1.0, 0.0]])
+
+            preview = pipeline.integrate_figures(config, apply=False)
+            with patch.object(pipeline, "OllamaClient", FakeVisualSynthesisClient):
+                result = pipeline.integrate_figures(config, apply=True)
+            after = pipeline.integrate_figures(config, apply=False)
+
+            self.assertEqual(preview["eligible"], 1)
+            self.assertEqual(result["updated"], 1)
+            self.assertEqual(after["eligible"], 0)
+            self.assertEqual(after["already_integrated"], 1)
+            rendered = note.read_text(encoding="utf-8")
+            self.assertIn("Existing generated summary.", rendered)
+            self.assertIn("Keep this personal observation.", rendered)
+            self.assertIn("Original figure evidence.", rendered)
+            self.assertIn("## Visual Synthesis", rendered)
+            self.assertIn("![[Assets/PaperRoach/visualsummary/figure-p002.png|420]]", rendered)
+            self.assertEqual(rendered.count("## Visual Synthesis"), 1)
 
 
 if __name__ == "__main__":
