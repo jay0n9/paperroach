@@ -113,7 +113,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_integrate_figures.add_argument(
         "--apply",
         action="store_true",
-        help="Actually write Visual Synthesis sections (default: dry run)",
+        help="Actually write inline visual evidence blocks (default: dry run)",
     )
     p_integrate_figures.add_argument(
         "--limit",
@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_integrate_figures.add_argument(
         "--force",
         action="store_true",
-        help="Recreate Visual Synthesis sections that already exist",
+        help="Regenerate managed visual evidence that already exists",
     )
     _add_common(p_integrate_figures)
     p_integrate_figures.set_defaults(func=cmd_integrate_figures)

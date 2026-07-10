@@ -148,6 +148,7 @@ class FakeVisualSynthesisClient:
             "visual_synthesis": [
                 {
                     "figure_index": 1,
+                    "section": "approach",
                     "finding": "The prototype exposes a two-panel personalization workflow.",
                     "connection": "It makes the interaction flow discussed in the summary concrete.",
                 }
@@ -286,9 +287,12 @@ class FigurePipelineTests(unittest.TestCase):
                 markdown="# Paper",
                 metadata=PaperMetadata(title="Visual Paper", year=2026),
                 analysis=PaperAnalysis(
+                    approach="The method defines a two-step interaction flow.",
+                    key_results="The workflow is evaluated with user evidence.",
                     visual_synthesis=[
                         {
                             "figure_index": 1,
+                            "section": "approach",
                             "finding": "The image shows a two-panel interaction flow.",
                             "connection": "It makes the proposed workflow concrete.",
                         }
@@ -300,9 +304,10 @@ class FigurePipelineTests(unittest.TestCase):
             doc.note_path = config.references_path / "Visual Paper (2026).md"
 
             rendered = obsidian.render_note(doc, [], config)
-            self.assertIn("## Visual Synthesis", rendered)
-            self.assertIn("![[Assets/PaperRoach/doc/figure-p002-abc.png|420]]", rendered)
-            self.assertLess(rendered.index("## Visual Synthesis"), rendered.index("## Key Figures"))
+            self.assertNotIn("## Visual Synthesis", rendered)
+            self.assertIn("![[Assets/PaperRoach/doc/figure-p002-abc.png|560]]", rendered)
+            self.assertLess(rendered.index("## Approach"), rendered.index("<!-- paperroach:visual-evidence:start -->"))
+            self.assertLess(rendered.index("<!-- paperroach:visual-evidence:start -->"), rendered.index("## Key Results"))
             self.assertIn("## Key Figures", rendered)
             self.assertIn("![[Assets/PaperRoach/doc/figure-p002-abc.png|720]]", rendered)
             self.assertIn("^figure-abc", rendered)
@@ -504,6 +509,9 @@ class FigurePipelineTests(unittest.TestCase):
                 "---\n"
                 "# Visual Summary Paper\n\n"
                 "## TL;DR\n\nExisting generated summary.\n\n"
+                "## Approach\n\nExisting approach.\n\n"
+                "## Key Results\n\nExisting result.\n\n"
+                "## Visual Synthesis\n\nLegacy visual content.\n\n"
                 "## Key Figures\n\nOriginal figure evidence.\n\n"
                 "## My Notes\n\nKeep this personal observation.\n\n"
                 "---\n# References\n",
@@ -549,11 +557,15 @@ class FigurePipelineTests(unittest.TestCase):
             self.assertEqual(after["already_integrated"], 1)
             rendered = note.read_text(encoding="utf-8")
             self.assertIn("Existing generated summary.", rendered)
+            self.assertIn("Existing approach.", rendered)
+            self.assertIn("Existing result.", rendered)
             self.assertIn("Keep this personal observation.", rendered)
             self.assertIn("Original figure evidence.", rendered)
-            self.assertIn("## Visual Synthesis", rendered)
-            self.assertIn("![[Assets/PaperRoach/visualsummary/figure-p002.png|420]]", rendered)
-            self.assertEqual(rendered.count("## Visual Synthesis"), 1)
+            self.assertNotIn("## Visual Synthesis", rendered)
+            self.assertNotIn("Legacy visual content.", rendered)
+            self.assertIn("![[Assets/PaperRoach/visualsummary/figure-p002.png|560]]", rendered)
+            self.assertLess(rendered.index("## Approach"), rendered.index("<!-- paperroach:visual-evidence:start -->"))
+            self.assertLess(rendered.index("<!-- paperroach:visual-evidence:start -->"), rendered.index("## Key Results"))
 
 
 if __name__ == "__main__":

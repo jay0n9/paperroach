@@ -40,6 +40,18 @@ _INLINE_MATH = re.compile(r"(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)")
 _MATH_CHARS = set("\\^_={}")
 _KEY_FIGURES_RE = re.compile(r"(?ms)^## Key Figures\n.*?(?=^## |\Z)")
 _VISUAL_SYNTHESIS_RE = re.compile(r"(?ms)^## Visual Synthesis\n.*?(?=^## |\Z)")
+_INLINE_VISUAL_START = "<!-- paperroach:visual-evidence:start -->"
+_INLINE_VISUAL_END = "<!-- paperroach:visual-evidence:end -->"
+_INLINE_VISUAL_BLOCK_RE = re.compile(
+    rf"(?ms)^{re.escape(_INLINE_VISUAL_START)}\r?\n.*?^{re.escape(_INLINE_VISUAL_END)}\r?\n?"
+)
+_VISUAL_SECTION_HEADINGS = {
+    "problem_motivation": "Problem & Motivation",
+    "approach": "Approach",
+    "key_results": "Key Results",
+    "takeaways": "Takeaways",
+}
+_VISUAL_SECTION_ORDER = tuple(_VISUAL_SECTION_HEADINGS)
 _SUMMARY_BOUNDARY_RE = re.compile(
     r"(?m)^## (?:Visual Synthesis|Key Figures|Key Equations|Concepts|Concept Map|"
     r"Related Papers|My Notes)\b|^# References\b"
@@ -297,20 +309,37 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
     out.append(f"> - **Link:** {source}")
     out.append("")
 
+    visual_blocks = _render_inline_visual_blocks(an.visual_synthesis, doc.figures)
+    if not visual_blocks:
+        visual_blocks = _existing_inline_visual_blocks(doc.note_path)
+    if not visual_blocks:
+        legacy_block = _legacy_visual_synthesis_block(doc.note_path)
+        if legacy_block:
+            visual_blocks = {"key_results": legacy_block}
+
     if an.tl_dr:
         out += ["## TL;DR", "", an.tl_dr, ""]
     if an.problem_motivation:
         out += ["## Problem & Motivation", "", an.problem_motivation, ""]
+    problem_visual = visual_blocks.pop("problem_motivation", "")
+    if problem_visual:
+        if not an.problem_motivation:
+            out += ["## Problem & Motivation", ""]
+        out += [problem_visual, ""]
     if an.approach:
         out += ["## Approach", "", an.approach, ""]
+    approach_visual = visual_blocks.pop("approach", "")
+    if approach_visual:
+        if not an.approach:
+            out += ["## Approach", ""]
+        out += [approach_visual, ""]
     if an.key_results:
         out += ["## Key Results", "", an.key_results, ""]
-    if an.visual_synthesis:
-        out += _render_visual_synthesis(an.visual_synthesis, doc.figures)
-    else:
-        existing_visual_synthesis = _existing_visual_synthesis(doc.note_path)
-        if existing_visual_synthesis:
-            out += [existing_visual_synthesis, ""]
+    results_visual = visual_blocks.pop("key_results", "")
+    if results_visual:
+        if not an.key_results:
+            out += ["## Key Results", ""]
+        out += [results_visual, ""]
     if an.contributions:
         out += ["## Contributions", ""] + [f"- {c}" for c in an.contributions] + [""]
     if an.strengths or an.limitations:
@@ -324,6 +353,13 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
         out.append("")
     if an.takeaways:
         out += ["## Takeaways", "", an.takeaways, ""]
+    takeaways_visual = visual_blocks.pop("takeaways", "")
+    if takeaways_visual:
+        if not an.takeaways:
+            out += ["## Takeaways", ""]
+        out += [takeaways_visual, ""]
+    for block in visual_blocks.values():
+        out += [block, ""]
     if doc.equations and not doc.equations_integrated:
         # Only dump a separate section if the equations weren't woven into the
         # Approach prose above.
@@ -357,12 +393,30 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
     return fix_inline_math("\n".join(out).rstrip() + "\n")
 
 
-def _render_visual_synthesis(
+def _visual_section_key(value: object) -> str:
+    """Normalize an LLM section label to one of the note's real sections."""
+    normalized = re.sub(r"[\s-]+", "_", str(value or "").strip().lower())
+    aliases = {
+        "problem": "problem_motivation",
+        "motivation": "problem_motivation",
+        "problem_and_motivation": "problem_motivation",
+        "method": "approach",
+        "methods": "approach",
+        "result": "key_results",
+        "results": "key_results",
+        "key_result": "key_results",
+        "takeaway": "takeaways",
+    }
+    normalized = aliases.get(normalized, normalized)
+    return normalized if normalized in _VISUAL_SECTION_HEADINGS else "key_results"
+
+
+def _render_inline_visual_blocks(
     synthesis: list[dict], figures: list[FigureAsset]
-) -> list[str]:
-    """Render a compact, figure-grounded section inside the study summary."""
+) -> dict[str, str]:
+    """Group visual evidence into the paper sections where it explains most."""
     by_index = {figure.index: figure for figure in figures}
-    items: list[tuple[FigureAsset, str, str]] = []
+    grouped: dict[str, list[tuple[FigureAsset, str, str]]] = {}
     seen_indices: set[int] = set()
     for item in synthesis:
         if not isinstance(item, dict):
@@ -376,22 +430,72 @@ def _render_visual_synthesis(
         connection = _figure_text(item.get("connection"))
         if figure is None or figure_index in seen_indices or not finding or not connection:
             continue
-        items.append((figure, finding, connection))
+        section = _visual_section_key(item.get("section"))
+        grouped.setdefault(section, []).append((figure, finding, connection))
         seen_indices.add(figure_index)
-        if len(items) >= 3:
+        if len(seen_indices) >= 3:
             break
-    if not items:
-        return []
+    return {
+        section: _render_inline_visual_block(items)
+        for section, items in grouped.items()
+        if items
+    }
 
-    out = ["## Visual Synthesis", ""]
+
+def _render_inline_visual_block(items: list[tuple[FigureAsset, str, str]]) -> str:
+    """Render an inline block that is safely replaceable on later refreshes."""
+    out = [_INLINE_VISUAL_START, "### Visual Evidence", ""]
     for figure, finding, connection in items:
         label = "Figure" if figure.source_kind == "figure" else "Table"
         page = f" (p. {figure.page})" if figure.page else ""
-        out += [f"### {label} {figure.index}{page}", ""]
+        out += [f"#### {label} {figure.index}{page}", ""]
         if figure.asset_relpath:
-            out += [f"![[{figure.asset_relpath}|420]]", ""]
-        out += [finding, "", f"**Connection to the study note:** {connection}", ""]
-    return out
+            out += [f"![[{figure.asset_relpath}|560]]", ""]
+        out += [
+            f"**What it shows:** {finding}",
+            "",
+            f"**Why it matters here:** {connection}",
+            "",
+        ]
+    out.append(_INLINE_VISUAL_END)
+    return "\n".join(out)
+
+
+def _note_section_match(text: str, heading: str) -> re.Match | None:
+    pattern = re.compile(
+        rf"(?ms)^## {re.escape(heading)}\b[^\n]*\n.*?(?=^## |\Z)"
+    )
+    return pattern.search(text)
+
+
+def _existing_inline_visual_blocks(note_path: Path | None) -> dict[str, str]:
+    """Read previously managed inline evidence so a rebuild never drops it."""
+    if note_path is None or not note_path.exists():
+        return {}
+    text = _read_text_tolerant(note_path)
+    blocks: dict[str, str] = {}
+    for section, heading in _VISUAL_SECTION_HEADINGS.items():
+        match = _note_section_match(text, heading)
+        if match is None:
+            continue
+        inline = _INLINE_VISUAL_BLOCK_RE.search(match.group(0))
+        if inline:
+            blocks[section] = inline.group(0).strip()
+    return blocks
+
+
+def _legacy_visual_synthesis_block(note_path: Path | None) -> str:
+    """Keep pre-inline visual synthesis visible until it is explicitly migrated."""
+    legacy = _existing_visual_synthesis(note_path)
+    if not legacy:
+        return ""
+    body = re.sub(r"(?m)^## Visual Synthesis[^\n]*\n?", "", legacy).strip()
+    body = re.sub(r"(?m)^### ", "#### ", body)
+    if not body:
+        return ""
+    return "\n".join(
+        [_INLINE_VISUAL_START, "### Visual Evidence", "", body, "", _INLINE_VISUAL_END]
+    )
 
 
 def _render_figures(figures: list[FigureAsset]) -> list[str]:
@@ -443,8 +547,11 @@ def _existing_visual_synthesis(note_path: Path | None) -> str:
 
 
 def has_visual_synthesis(path: Path) -> bool:
-    """True when a generated note already contains visual synthesis."""
-    return path.exists() and _VISUAL_SYNTHESIS_RE.search(_read_text_tolerant(path)) is not None
+    """True when a note already uses the current inline visual-evidence format."""
+    if not path.exists():
+        return False
+    text = _read_text_tolerant(path)
+    return _INLINE_VISUAL_BLOCK_RE.search(text) is not None
 
 
 def generated_summary_context(path: Path) -> str:
@@ -452,6 +559,7 @@ def generated_summary_context(path: Path) -> str:
     if not path.exists():
         return ""
     _frontmatter, body = split_frontmatter(_read_text_tolerant(path))
+    body = _INLINE_VISUAL_BLOCK_RE.sub("", body)
     boundary = _SUMMARY_BOUNDARY_RE.search(body)
     if boundary:
         body = body[: boundary.start()]
@@ -677,37 +785,65 @@ def update_figures_in_file(path: Path, figures: list[FigureAsset]) -> bool:
 def update_visual_synthesis_in_file(
     path: Path, synthesis: list[dict], figures: list[FigureAsset]
 ) -> bool:
-    """Insert or replace only the managed visual-synthesis section of a note."""
+    """Place managed figure evidence directly inside the relevant note sections."""
     if not path.exists() or not synthesis or not figures:
         return False
-    section_lines = _render_visual_synthesis(synthesis, figures)
-    if not section_lines:
+    blocks = _render_inline_visual_blocks(synthesis, figures)
+    if not blocks:
         return False
     original = _read_text_tolerant(path)
-    section = "\n".join(section_lines).strip()
-    match = _VISUAL_SYNTHESIS_RE.search(original)
-    if match:
-        updated = (
-            original[:match.start()]
-            + section
-            + "\n\n"
-            + original[match.end():].lstrip()
+    # Remove only our prior managed material. Everything else, including user
+    # notes and generated prose, remains byte-for-byte in place.
+    updated = _VISUAL_SYNTHESIS_RE.sub("", original)
+    updated = _INLINE_VISUAL_BLOCK_RE.sub("", updated)
+    pending: list[str] = []
+    for section in _VISUAL_SECTION_ORDER:
+        block = blocks.get(section)
+        if not block:
+            continue
+        updated, inserted = _append_inline_visual_block(updated, section, block)
+        if not inserted:
+            pending.append(block)
+
+    if pending:
+        fallback = next(
+            (
+                section
+                for section in ("key_results", "approach", "problem_motivation", "takeaways")
+                if _note_section_match(updated, _VISUAL_SECTION_HEADINGS[section])
+            ),
+            None,
         )
-    else:
-        boundary = _KEY_FIGURES_RE.search(original) or re.search(
-            r"(?m)^## (?:Concepts|Related Papers|My Notes)\b|^# References\b",
-            original,
-        )
-        if boundary:
-            prefix = original[:boundary.start()].rstrip()
-            suffix = original[boundary.start():]
-            updated = f"{prefix}\n\n{section}\n\n{suffix}"
+        combined = "\n\n".join(pending)
+        if fallback:
+            updated, _inserted = _append_inline_visual_block(updated, fallback, combined)
         else:
-            updated = original.rstrip() + f"\n\n{section}\n"
+            boundary = _KEY_FIGURES_RE.search(updated) or re.search(
+                r"(?m)^## (?:Concepts|Related Papers|My Notes)\b|^# References\b",
+                updated,
+            )
+            fallback_section = f"## Key Results\n\n{combined}"
+            if boundary:
+                prefix = updated[:boundary.start()].rstrip()
+                suffix = updated[boundary.start():]
+                updated = f"{prefix}\n\n{fallback_section}\n\n{suffix}"
+            else:
+                updated = updated.rstrip() + f"\n\n{fallback_section}\n"
     if updated != original:
         write_text_atomic(path, updated)
         return True
     return False
+
+
+def _append_inline_visual_block(text: str, section: str, block: str) -> tuple[str, bool]:
+    """Append one managed visual block to a generated top-level section."""
+    heading = _VISUAL_SECTION_HEADINGS[section]
+    match = _note_section_match(text, heading)
+    if match is None:
+        return text, False
+    current = match.group(0).rstrip()
+    updated = text[:match.start()] + current + f"\n\n{block}\n\n" + text[match.end():].lstrip()
+    return updated, True
 
 
 # --------------------------------------------------------------------------- #

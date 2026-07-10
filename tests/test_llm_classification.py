@@ -35,6 +35,7 @@ class LLMClassificationTests(unittest.TestCase):
                 "visual_synthesis": [
                     {
                         "figure_index": 1,
+                        "section": "approach",
                         "finding": "The figure shows an interaction workflow.",
                         "connection": "It makes the proposed flow concrete.",
                     },
@@ -61,6 +62,7 @@ class LLMClassificationTests(unittest.TestCase):
 
         self.assertEqual(len(synthesis), 1)
         self.assertEqual(synthesis[0]["figure_index"], 1)
+        self.assertEqual(synthesis[0]["section"], "approach")
         self.assertIn("Allowed figure indices: 1", client.user)
         self.assertIn("Existing generated study summary", client.user)
 
@@ -71,6 +73,7 @@ class LLMClassificationTests(unittest.TestCase):
                 "visual_synthesis": [
                     {
                         "figure_index": 2,
+                        "section": "key_results",
                         "finding": "A comparison chart is visible.",
                         "connection": "It supports the reported result.",
                     }
@@ -80,6 +83,7 @@ class LLMClassificationTests(unittest.TestCase):
 
         self.assertEqual(analysis.tl_dr, "A visual paper.")
         self.assertEqual(analysis.visual_synthesis[0]["figure_index"], 2)
+        self.assertEqual(analysis.visual_synthesis[0]["section"], "key_results")
 
     def test_metadata_extraction_preserves_explicit_domain_fields(self):
         metadata = llm._coerce(

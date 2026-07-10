@@ -867,8 +867,8 @@ def integrate_figures(
 
     This is deliberately separate from figure extraction: it reuses the
     reviewed figure descriptions already stored in LanceDB and changes only
-    the managed ``## Visual Synthesis`` section. Existing analysis and user
-    content remain intact.
+    managed inline visual-evidence blocks inside the relevant study sections.
+    Existing analysis and user content remain intact.
     """
     if limit is not None and limit < 1:
         raise ValueError(f"limit must be at least 1 (got {limit})")
