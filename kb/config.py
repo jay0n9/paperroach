@@ -3,7 +3,7 @@
 Precedence (highest first):
     1. explicit CLI overrides (dict passed to ``load_config``)
     2. environment variables (``KB_*``)
-    3. a ``kb.toml`` file (``KB_CONFIG`` env, ./kb.toml, or <vault>/kb.toml)
+    3. a ``kb.toml`` file (``KB_CONFIG``, vault, cwd, then user config)
     4. built-in defaults
 """
 from __future__ import annotations
@@ -173,22 +173,58 @@ class Config:
 # --------------------------------------------------------------------------- #
 #  Loading helpers
 # --------------------------------------------------------------------------- #
-def _find_config_file(overrides: dict) -> Path | None:
+def user_config_path(
+    *,
+    platform: str | None = None,
+    environ: dict[str, str] | None = None,
+    home: Path | None = None,
+) -> Path:
+    """Return PaperRoach's per-user configuration path for this OS."""
+    platform = platform or sys.platform
+    environ = os.environ if environ is None else environ
+    home = Path.home() if home is None else Path(home)
+
+    if platform == "win32":
+        base = Path(environ.get("APPDATA") or home / "AppData" / "Roaming")
+        return base / "PaperRoach" / "kb.toml"
+    if platform == "darwin":
+        return home / "Library" / "Application Support" / "PaperRoach" / "kb.toml"
+    base = Path(environ.get("XDG_CONFIG_HOME") or home / ".config")
+    return base / "paperroach" / "kb.toml"
+
+
+def _config_candidates(
+    overrides: dict,
+    *,
+    config_path: str | Path | None = None,
+) -> tuple[list[Path], bool]:
+    """Return config candidates in priority order and whether one is forced."""
+    if config_path is not None:
+        explicit = Path(config_path).expanduser()
+        if not explicit.is_file():
+            raise ConfigError(f"Config path points to a missing file: {explicit}")
+        return [explicit], True
+
     candidates: list[Path] = []
     if os.environ.get("KB_CONFIG"):
-        explicit = Path(os.environ["KB_CONFIG"])
+        explicit = Path(os.environ["KB_CONFIG"]).expanduser()
         if not explicit.is_file():
             raise ConfigError(f"KB_CONFIG points to a missing file: {explicit}")
-        return explicit
+        return [explicit], True
     # A vault may carry its own kb.toml; consider it if we know the vault.
     vault = overrides.get("vault_path") or os.environ.get("KB_VAULT")
     if vault:
-        candidates.append(Path(vault) / "kb.toml")
+        candidates.append(Path(vault).expanduser() / "kb.toml")
     candidates.append(Path.cwd() / "kb.toml")
-    for c in candidates:
-        if c.is_file():
-            return c
-    return None
+    candidates.append(user_config_path())
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        identity = _path_identity(candidate)
+        if identity not in seen:
+            seen.add(identity)
+            unique.append(candidate)
+    return unique, False
 
 
 def _path_identity(value) -> str:
@@ -280,7 +316,11 @@ def _validate_config(cfg: Config) -> None:
             )
 
 
-def load_config(overrides: dict | None = None) -> Config:
+def load_config(
+    overrides: dict | None = None,
+    *,
+    config_path: str | Path | None = None,
+) -> Config:
     """Build a :class:`Config`, merging file / env / CLI overrides.
 
     ``overrides`` keys mirror :class:`Config` field names. ``None`` values are
@@ -292,27 +332,40 @@ def load_config(overrides: dict | None = None) -> Config:
     merged: dict = {}
 
     # 3. file
-    cfg_file = _find_config_file(overrides)
-    if cfg_file is not None:
+    candidates, forced_config = _config_candidates(
+        overrides,
+        config_path=config_path,
+    )
+    cfg_file: Path | None = None
+    data: dict = {}
+    vault_override = overrides.get("vault_path") or os.environ.get("KB_VAULT")
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
         try:
-            with cfg_file.open("rb") as fh:
-                data = tomllib.load(fh)
+            with candidate.open("rb") as fh:
+                candidate_data = tomllib.load(fh)
         except tomllib.TOMLDecodeError as exc:
-            raise ConfigError(f"Invalid TOML in {cfg_file}: {exc}") from exc
-        vault_override = overrides.get("vault_path") or os.environ.get("KB_VAULT")
+            raise ConfigError(f"Invalid TOML in {candidate}: {exc}") from exc
         if (
             vault_override
-            and not os.environ.get("KB_CONFIG")
-            and data.get("vault_path")
-            and not _same_path(data["vault_path"], vault_override)
+            and not forced_config
+            and candidate_data.get("vault_path")
+            and not _same_path(candidate_data["vault_path"], vault_override)
         ):
             print(
                 "paperroach: warning: ignoring "
-                f"{cfg_file} because it configures vault_path={data['vault_path']!r} "
+                f"{candidate} because it configures "
+                f"vault_path={candidate_data['vault_path']!r} "
                 f"but --vault/KB_VAULT selects {str(vault_override)!r}",
                 file=sys.stderr,
             )
-            data = {}
+            continue
+        cfg_file = candidate
+        data = candidate_data
+        break
+
+    if cfg_file is not None:
         for k, v in data.items():
             if k in valid:
                 merged[k] = v
@@ -334,8 +387,8 @@ def load_config(overrides: dict | None = None) -> Config:
 
     if "vault_path" not in merged:
         raise ConfigError(
-            "No vault path configured. Pass --vault, set KB_VAULT, or add "
-            "vault_path to kb.toml (see kb/templates/kb.example.toml)."
+            "No vault path configured. Run 'paperroach setup', pass --vault, "
+            "set KB_VAULT, or add vault_path to kb.toml."
         )
 
     coerced = {k: _coerce(k, v) for k, v in merged.items()}

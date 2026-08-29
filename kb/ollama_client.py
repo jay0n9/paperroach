@@ -111,6 +111,27 @@ class OllamaClient:
                 f"({exc}). Start it with 'ollama serve' and retry."
             ) from exc
 
+    def installed_models(self) -> set[str]:
+        """Return model tags exposed by the local Ollama server."""
+        url = self.config.ollama_host.rstrip("/") + "/api/tags"
+        try:
+            raw = urllib.request.urlopen(url, timeout=10).read()
+            payload = json.loads(raw.decode("utf-8"))
+        except Exception as exc:
+            raise OllamaError(
+                f"Could not list Ollama models at {self.config.ollama_host} "
+                f"({exc})."
+            ) from exc
+
+        names: set[str] = set()
+        for item in payload.get("models", []):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or item.get("model")
+            if isinstance(name, str) and name:
+                names.add(name)
+        return names
+
     # ── PASS A : LLM ────────────────────────────────────────────────
     def _chat(self, messages, *, fmt=None, temperature: float) -> str:
         cfg = self.config

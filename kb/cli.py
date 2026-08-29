@@ -1,6 +1,7 @@
 """Command-line interface.
 
-    paperroach init                 scaffold kb.toml + vault folders
+    paperroach setup                discover Obsidian and configure first run
+    paperroach init                 scaffold a legacy local kb.toml
     paperroach build <paths...>     run the full pipeline (PASS A → swap → PASS B)
     paperroach enrich-figures       add visual evidence to existing paper notes
     paperroach integrate-figures    weave indexed figures into existing study notes
@@ -13,12 +14,20 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
+import subprocess
 import sys
 from importlib.resources import files
 from pathlib import Path
 
 from kb import __version__
-from kb.config import Config, ConfigError, load_config
+from kb.config import Config, ConfigError, load_config, user_config_path
+from kb.onboarding import (
+    discover_obsidian_vaults,
+    validate_obsidian_vault,
+    write_user_config,
+)
 
 
 def _add_common(p: argparse.ArgumentParser) -> None:
@@ -60,6 +69,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"paperroach {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_setup = sub.add_parser(
+        "setup",
+        help="Auto-detect Obsidian and create a user-wide config",
+    )
+    p_setup.add_argument(
+        "--vault",
+        dest="vault_path",
+        help="Existing Obsidian vault (auto-detected when omitted)",
+    )
+    p_setup.add_argument(
+        "--config",
+        dest="config_path",
+        help="Advanced: config destination (defaults to the OS user config)",
+    )
+    p_setup.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace an existing config that selects a different vault",
+    )
+    p_setup.add_argument(
+        "--pull-models",
+        action="store_true",
+        help="Download the configured Ollama models required for this vault",
+    )
+    p_setup.set_defaults(func=cmd_setup)
 
     p_init = sub.add_parser("init", help="Create kb.toml and vault folders")
     p_init.add_argument("--vault", dest="vault_path", required=True)
@@ -298,6 +333,161 @@ def _run_locked(config: Config, owner: str, func) -> int:
 # --------------------------------------------------------------------------- #
 #  Commands
 # --------------------------------------------------------------------------- #
+def _choose_setup_vault(args: argparse.Namespace) -> Path:
+    if args.vault_path:
+        return validate_obsidian_vault(args.vault_path)
+
+    candidates = discover_obsidian_vaults()
+    if len(candidates) == 1:
+        print(f"Detected Obsidian vault: {candidates[0]}")
+        return candidates[0]
+
+    if not sys.stdin.isatty():
+        if candidates:
+            choices = "\n".join(f"  - {candidate}" for candidate in candidates)
+            raise ConfigError(
+                "Multiple Obsidian vaults were found in a non-interactive session. "
+                "Rerun with --vault PATH. Candidates:\n" + choices
+            )
+        raise ConfigError(
+            "No Obsidian vault was detected. Rerun with --vault PATH."
+        )
+
+    if candidates:
+        print("Obsidian vaults:")
+        for index, candidate in enumerate(candidates, start=1):
+            print(f"  {index}. {candidate}")
+        answer = input("Choose a vault [1]: ").strip() or "1"
+        try:
+            selection = int(answer)
+            if selection < 1 or selection > len(candidates):
+                raise ValueError
+            selected = candidates[selection - 1]
+        except ValueError as exc:
+            raise ConfigError(f"Invalid vault selection: {answer!r}") from exc
+        return selected
+
+    answer = input("Path to an existing Obsidian vault: ").strip()
+    if not answer:
+        raise ConfigError("An Obsidian vault path is required.")
+    return validate_obsidian_vault(answer)
+
+
+def _pull_ollama_models(models: list[str]) -> bool:
+    executable = shutil.which("ollama")
+    if executable is None:
+        print(
+            "[FAIL] Ollama CLI was not found. Install it from https://ollama.com "
+            "and rerun setup with --pull-models.",
+            file=sys.stderr,
+        )
+        return False
+
+    succeeded = True
+    for model in dict.fromkeys(models):
+        print(f"Pulling Ollama model: {model}")
+        completed = subprocess.run([executable, "pull", model], check=False)
+        if completed.returncode:
+            print(
+                f"[FAIL] ollama pull {model} exited with {completed.returncode}.",
+                file=sys.stderr,
+            )
+            succeeded = False
+    return succeeded
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    from kb import zotero
+
+    vault = _choose_setup_vault(args)
+    default_path = user_config_path()
+    cfg_path = (
+        Path(args.config_path).expanduser()
+        if args.config_path
+        else default_path
+    )
+    try:
+        cfg_path = cfg_path.resolve()
+    except OSError:
+        cfg_path = cfg_path.absolute()
+
+    wrote = write_user_config(vault, cfg_path, force=args.force)
+    config = load_config(
+        {"vault_path": str(vault)},
+        config_path=cfg_path,
+    )
+    config.ensure_dirs()
+
+    print("\nPaperRoach setup")
+    print(f"[OK] Vault       {vault}")
+    action = "Wrote" if wrote else "Kept"
+    print(f"[OK] Config      {action} {cfg_path}")
+    print(f"[OK] References  {config.references_path}")
+    print(f"[OK] Store       {config.kb_path}")
+
+    forced_config = os.environ.get("KB_CONFIG")
+    local_config = (Path.cwd() / "kb.toml").resolve()
+    if (
+        not forced_config
+        and local_config.is_file()
+        and local_config != cfg_path
+    ):
+        print(
+            f"[WARN] {local_config} is checked before the user config while "
+            "commands run from this directory."
+        )
+
+    if forced_config:
+        try:
+            forced_path = Path(forced_config).expanduser().resolve()
+        except OSError:
+            forced_path = Path(forced_config).expanduser().absolute()
+        if forced_path != cfg_path:
+            print(
+                f"[WARN] KB_CONFIG={forced_config} overrides this setup config. "
+                "Unset it before running PaperRoach."
+            )
+
+    forced_vault = os.environ.get("KB_VAULT")
+    if forced_vault:
+        try:
+            forced_vault_path = Path(forced_vault).expanduser().resolve()
+        except OSError:
+            forced_vault_path = Path(forced_vault).expanduser().absolute()
+        if forced_vault_path != vault:
+            print(
+                f"[WARN] KB_VAULT={forced_vault} overrides the selected vault. "
+                "Unset it before running PaperRoach."
+            )
+
+    if cfg_path != default_path.resolve():
+        print(
+            "[WARN] Custom config path selected. Set KB_CONFIG to this path "
+            "before later commands."
+        )
+
+    data_dir = zotero.find_data_dir(config)
+    if data_dir is None:
+        print("[WARN] Zotero      Not detected; set zotero_dir later if needed.")
+    else:
+        print(f"[OK] Zotero      {data_dir}")
+
+    required_models = [config.llm_model, config.embed_model]
+    if config.figure_mode == "describe":
+        required_models.append(config.vision_model)
+    if args.pull_models and not _pull_ollama_models(required_models):
+        return 1
+    if not args.pull_models:
+        print("[NEXT] Models      Download after Ollama is installed:")
+        for model in dict.fromkeys(required_models):
+            print(f"  ollama pull {model}")
+
+    print("\nNext:")
+    print("  paperroach doctor")
+    print('  paperroach build "path/to/one-paper.pdf"')
+    return 0
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     vault = Path(args.vault_path).expanduser()
     vault.mkdir(parents=True, exist_ok=True)
@@ -339,6 +529,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     print("  ollama pull qwen3:8b")
     print("  ollama pull bge-m3")
     print("  # Optional figure descriptions: ollama pull qwen2.5vl:7b")
+    print("  paperroach doctor")
     print('  paperroach build "path/to/paper.pdf"')
     return 0
 
@@ -667,8 +858,24 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         from kb.ollama_client import OllamaClient
 
         try:
-            OllamaClient(config).ping()
+            client = OllamaClient(config)
+            client.ping()
             ok("Ollama", config.ollama_host)
+            installed = client.installed_models()
+            required = [
+                ("Text model", config.llm_model),
+                ("Embed model", config.embed_model),
+            ]
+            if config.figure_mode == "describe":
+                required.append(("Vision model", config.vision_model))
+            for label, model in required:
+                aliases = {model}
+                if ":" not in model:
+                    aliases.add(f"{model}:latest")
+                if aliases & installed:
+                    ok(label, model)
+                else:
+                    fail(label, f"{model} is not installed; run: ollama pull {model}")
         except Exception as exc:
             fail("Ollama", str(exc))
 
