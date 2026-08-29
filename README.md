@@ -3,7 +3,7 @@
 [![CI](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml/badge.svg)](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml)
 
 [Website](https://jay0n9.github.io/paperroach/) ·
-[Installation guide](INSTALL.md) ·
+[Installation guide](https://github.com/jay0n9/paperroach/blob/main/INSTALL.md) ·
 [Issues](https://github.com/jay0n9/paperroach/issues)
 
 PaperRoach is a local-first paper knowledge pipeline for researchers who keep
@@ -68,22 +68,20 @@ ollama pull qwen2.5vl:7b
 
 ## Install
 
-The [new-user installation guide](INSTALL.md) covers Windows, macOS, Linux,
+The [new-user installation guide](https://github.com/jay0n9/paperroach/blob/main/INSTALL.md)
+covers Windows, macOS, Linux,
 Obsidian and Zotero detection, Ollama model downloads, the first PDF, and
-troubleshooting. The short source-install path is:
+troubleshooting. Install the published CLI into its own isolated environment:
 
 ```text
-git clone https://github.com/jay0n9/paperroach.git
-cd paperroach
 uv python install 3.12
-uv venv --python 3.12 .venv
-uv pip install --python .venv .
+uv tool install --python 3.12 paperroach
+paperroach --version
 ```
 
 The primary CLI is `paperroach`. The older `kb` command remains as a
-compatibility alias. Activate `.venv` before using it: run
-`.\.venv\Scripts\Activate.ps1` on Windows or
-`source .venv/bin/activate` on macOS/Linux.
+compatibility alias. If uv reports that its tool directory is missing from
+`PATH`, run `uv tool update-shell` and open a new terminal.
 
 ## First-time setup
 

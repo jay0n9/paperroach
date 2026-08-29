@@ -5,8 +5,15 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ## Unreleased
 
+_No changes yet._
+
+## 0.1.0 - 2026-08-30
+
 ### Added
 
+- Initial public PaperRoach package with local-first paper ingestion, Obsidian
+  note generation, Zotero metadata enrichment, LanceDB search, and Ollama-based
+  analysis.
 - A complete Windows, macOS, and Linux new-user installation guide covering
   Python, Obsidian, Zotero, Ollama models, first build, and troubleshooting.
 - `paperroach setup` for safe Obsidian vault discovery, user-wide minimal
@@ -15,6 +22,7 @@ release. Follow semantic versioning and keep entries short enough to scan.
 - Store metadata validation for schema version, embedding model, and embedding
   dimension compatibility.
 - Release checklist and changelog template.
+- PyPI distribution through a secretless OpenID Connect release workflow.
 - Contributor, governance, code-of-conduct, security, citation, CODEOWNERS,
   issue-form, pull-request, and Dependabot foundations for public development.
 - Isolated wheel-install smoke testing in CI.
@@ -28,6 +36,8 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Changed
 
+- The default install, update, and removal path now uses `uv tool`, so users do
+  not need to clone the repository or activate a virtual environment.
 - `paperroach doctor` now verifies the configured text, embedding, and
   optional vision model tags instead of checking server reachability alone.
 - Wheel smoke tests now exercise the installed `paperroach` executable,
@@ -67,11 +77,3 @@ release. Follow semantic versioning and keep entries short enough to scan.
 - Existing stores without `.kb/store_meta.json` will write metadata the next
   time PaperRoach opens them successfully. Changing `embed_model` or
   `embed_dim` after that requires rebuilding or migrating the store.
-
-## 0.1.0
-
-### Added
-
-- Initial public PaperRoach package with local-first paper ingestion, Obsidian
-  note generation, Zotero metadata enrichment, LanceDB search, and Ollama-based
-  analysis.
