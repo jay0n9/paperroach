@@ -2,6 +2,10 @@
 
 [![CI](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml/badge.svg)](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml)
 
+[Website](https://jay0n9.github.io/paperroach/) ·
+[Installation guide](INSTALL.md) ·
+[Issues](https://github.com/jay0n9/paperroach/issues)
+
 PaperRoach is a local-first paper knowledge pipeline for researchers who keep
 papers in Zotero and notes in Obsidian. It turns PDFs and Markdown notes into a
 linked Obsidian knowledge library, backed by LanceDB vector search and local
@@ -46,8 +50,13 @@ Obsidian notes, concept notes, tags, related-paper links
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11 or 3.12 (Python 3.12 via
+  [uv-managed Python](https://docs.astral.sh/uv/guides/install-python/) is
+  recommended)
+- An existing Obsidian vault
 - Ollama running locally at `http://localhost:11434`
+- Zotero is optional for manual PDF builds and recommended for automatic
+  metadata and attachment watching
 - Recommended models:
 
 ```bash
@@ -59,38 +68,41 @@ ollama pull qwen2.5vl:7b
 
 ## Install
 
-```bash
-pip install -e .
-```
+The [new-user installation guide](INSTALL.md) covers Windows, macOS, Linux,
+Obsidian and Zotero detection, Ollama model downloads, the first PDF, and
+troubleshooting. The short source-install path is:
 
-Or install runtime dependencies without installing the package:
-
-```bash
-pip install -r requirements.txt
+```text
+git clone https://github.com/jay0n9/paperroach.git
+cd paperroach
+uv python install 3.12
+uv venv --python 3.12 .venv
+uv pip install --python .venv .
 ```
 
 The primary CLI is `paperroach`. The older `kb` command remains as a
-compatibility alias.
+compatibility alias. Activate `.venv` before using it: run
+`.\.venv\Scripts\Activate.ps1` on Windows or
+`source .venv/bin/activate` on macOS/Linux.
 
-For manual commands and development checks, use Python 3.11 or 3.12 in a
-dedicated virtual environment, then install the project with `pip install -e .`.
-This is the same supported Python range exercised by CI on Windows and Linux.
-Optional PDF backends such as OCR, Docling, and Nougat should be installed only
-in that environment.
+## First-time setup
 
-## Configure
-
-```bash
-paperroach init --vault "C:/Users/you/Documents/MyVault"
+```text
+paperroach setup --pull-models
+paperroach doctor
 ```
 
-This creates `References/` and `.kb/` in your vault and writes `kb.toml` in the
-current directory. See `kb/templates/kb.example.toml` for all options.
+Setup detects Obsidian vaults that have been opened, writes a small user-level
+config, prepares `References/` and `.kb/`, reports Zotero when available, and
+downloads the configured Ollama models only when `--pull-models` is passed. It
+is safe to rerun. Pass `--vault PATH` when detection finds none or more than one.
+See `kb/templates/kb.example.toml` for every optional setting.
 
 Configuration precedence:
 
 ```text
-CLI flags > KB_* environment variables > kb.toml > built-in defaults
+CLI flags > KB_* environment variables > selected config > built-in defaults
+KB_CONFIG > <explicit vault>/kb.toml > ./kb.toml > user config
 ```
 
 If `KB_CONFIG` is set, it must point to an existing TOML file. Invalid TOML,

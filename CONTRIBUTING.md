@@ -14,9 +14,12 @@ taxonomy improvements, tests, and carefully scoped product changes.
 
 ## Development Setup
 
+Complete the user prerequisites in [INSTALL.md](INSTALL.md), then install the
+checkout in editable mode:
+
 ```bash
 python -m venv .venv
-.venv/Scripts/activate  # Windows PowerShell
+.\.venv\Scripts\Activate.ps1  # Windows PowerShell
 pip install -e .
 python -m unittest discover -s tests -v
 ```
@@ -50,7 +53,8 @@ python scripts/smoke_wheel.py dist
 ```
 
 The wheel smoke test installs the built artifact in a clean virtual environment
-and verifies that `paperroach init` writes a usable configuration template.
+and verifies the installed `paperroach` command, idempotent `setup` flow, and
+the legacy `init` configuration template.
 
 ## Architecture Map
 

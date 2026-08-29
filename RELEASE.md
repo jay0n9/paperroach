@@ -40,6 +40,10 @@ If the release changes LanceDB table schemas, generated frontmatter fields, or
 embedding compatibility, document whether users must rebuild `<vault>/.kb` or
 can run an in-place migration.
 
+If setup, supported Python versions, optional dependencies, or model defaults
+change, repeat the applicable path in `INSTALL.md` and update the guide in the
+same release.
+
 ## Tagging
 
 Create the version commit first, then tag that exact commit:

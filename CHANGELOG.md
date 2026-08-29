@@ -7,6 +7,10 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Added
 
+- A complete Windows, macOS, and Linux new-user installation guide covering
+  Python, Obsidian, Zotero, Ollama models, first build, and troubleshooting.
+- `paperroach setup` for safe Obsidian vault discovery, user-wide minimal
+  configuration, and explicit default-model downloads.
 - `paperroach doctor` for config, store, Zotero, and Ollama health checks.
 - Store metadata validation for schema version, embedding model, and embedding
   dimension compatibility.
@@ -24,6 +28,12 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Changed
 
+- `paperroach doctor` now verifies the configured text, embedding, and
+  optional vision model tags instead of checking server reachability alone.
+- Wheel smoke tests now exercise the installed `paperroach` executable,
+  idempotent `setup`, and the legacy `init` template path.
+- Package metadata now advertises supported Python versions, research-tool
+  classifiers, search keywords, and project URLs.
 - Metadata extraction now preserves explicit `Domain` and `Subdomain` fields
   before classifier or body-text fallback cues are considered.
 - Documented vector store compatibility and future migration expectations.
@@ -38,6 +48,8 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Fixed
 
+- Config discovery now falls through past a mismatched vault-local or
+  current-directory file to a matching user config.
 - Automatically discovered `kb.toml` files for a different vault are ignored
   when `--vault` or `KB_VAULT` selects another vault, preventing accidental
   reuse of another vault's absolute store path or model settings.
