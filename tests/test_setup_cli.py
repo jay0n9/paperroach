@@ -54,7 +54,10 @@ class SetupCLITests(unittest.TestCase):
             self.assertEqual(code, 0)
             with config_path.open("rb") as handle:
                 payload = tomllib.load(handle)
-            self.assertEqual(Path(payload["vault_path"]), vault)
+            self.assertEqual(
+                Path(payload["vault_path"]).resolve(),
+                vault.resolve(),
+            )
             self.assertTrue((vault / "References").is_dir())
             self.assertTrue((vault / ".kb").is_dir())
             self.assertIn("[OK] Config", stdout.getvalue())
