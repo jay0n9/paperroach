@@ -92,7 +92,7 @@
 
       <div class="pipeline-stage" role="img" aria-label="PaperRoach workflow preview: a Zotero PDF is processed by local Ollama models into an editable, linked Obsidian note." data-label-copy="workflowPreviewLabel">
         <div class="stage-topbar">
-          <span data-copy="stageLabel">LIVE PIPELINE / ONE PAPER</span>
+          <span data-copy="stageLabel">WORKFLOW PREVIEW / ONE PAPER</span>
           <span class="stage-state"><span></span><span data-copy="stageLocal">LOCAL</span></span>
         </div>
 
@@ -243,7 +243,7 @@
 <span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach setup --pull-models
 <span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach doctor
 <span class="prompt">&gt;</span> # Paste the full path to one PDF when prompted.
-<span class="prompt">&gt;</span> $pdf = Read-Host "PDF path"
+<span class="prompt">&gt;</span> $pdf = (Read-Host "PDF path").Trim().Trim('"')
 <span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach build $pdf</code></pre>
           <pre id="unix-code" class="code-panel" role="tabpanel" aria-labelledby="unix-tab" tabindex="0" hidden><code><span class="prompt">$</span> git clone https://github.com/jay0n9/paperroach.git
 <span class="prompt">$</span> cd paperroach
@@ -253,7 +253,7 @@
 <span class="prompt">$</span> ./.venv/bin/python -m paperroach setup --pull-models
 <span class="prompt">$</span> ./.venv/bin/python -m paperroach doctor
 <span class="prompt">$</span> # Paste the full path to one PDF when prompted.
-<span class="prompt">$</span> read -r -p "PDF path: " pdf
+<span class="prompt">$</span> printf 'PDF path: '; IFS= read -r pdf
 <span class="prompt">$</span> ./.venv/bin/python -m paperroach build "$pdf"</code></pre>
           <div class="terminal-result">
             <span class="check">✓</span>

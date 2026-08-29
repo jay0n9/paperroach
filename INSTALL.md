@@ -346,14 +346,14 @@ activated.
 ### Scanned PDFs
 
 ```bash
-python -m pip install ".[ocr]"
+uv pip install --python .venv ".[ocr]"
 paperroach build "scanned-paper.pdf" --ingester ocr
 ```
 
 ### Layout-aware figure extraction
 
 ```bash
-python -m pip install ".[docling]"
+uv pip install --python .venv ".[docling]"
 ```
 
 Add the following to the effective `kb.toml`:
@@ -497,7 +497,7 @@ receives extracted paper text and any requested figure images.
 Uninstall the Python package from the environment with:
 
 ```bash
-python -m pip uninstall paperroach
+uv pip uninstall --python .venv paperroach
 ```
 
 Deleting the virtual environment is another complete package removal. Neither
