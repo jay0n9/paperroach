@@ -2,8 +2,8 @@
 
 This guide takes a new user from an empty machine to one generated Obsidian
 paper note. It covers Windows, macOS, and Linux. The currently verified
-installation path is a local source checkout; a shorter package-manager path
-can replace it after the first public package release.
+installation path uses uv to install the published PaperRoach command in its
+own isolated environment.
 
 ## What you will install
 
@@ -103,7 +103,7 @@ ollama --version
 ollama list
 ```
 
-## 2. Install uv and obtain PaperRoach
+## 2. Install uv
 
 PaperRoach currently supports Python 3.11 and 3.12. Python 3.13 and newer are
 not yet in the supported package range. Python 3.12 is recommended for a new
@@ -116,36 +116,18 @@ You do not need to install Python separately.
 
 - [uv installation](https://docs.astral.sh/uv/getting-started/installation/)
 - [uv-managed Python](https://docs.astral.sh/uv/guides/install-python/)
-- [Git downloads](https://git-scm.com/downloads/)
 
-You can clone the repository with Git:
+## 3. Install PaperRoach
+
+uv gives PaperRoach its own environment and exposes the `paperroach` command
+without requiring you to clone the repository, activate a virtual environment,
+or manage dependencies manually:
 
 ```bash
-git clone https://github.com/jay0n9/paperroach.git
-cd paperroach
-```
-
-If Git is not installed, [download the main branch ZIP](https://github.com/jay0n9/paperroach/archive/refs/heads/main.zip),
-extract it, and open a terminal inside the extracted `paperroach-main` folder.
-
-## 3. Create an isolated environment and install
-
-Using a virtual environment keeps PaperRoach and its scientific dependencies
-separate from other Python applications. Run these commands from the cloned or
-extracted PaperRoach folder.
-
-### Windows PowerShell
-
-These commands install the current Python 3.12 patch, create the environment,
-and install PaperRoach. They do not require activating the environment, so they
-also work when PowerShell blocks `Activate.ps1`:
-
-```powershell
 uv --version
 uv python install 3.12
-uv venv --python 3.12 .venv
-uv pip install --python .venv .
-.\.venv\Scripts\python.exe -m paperroach --version
+uv tool install --python 3.12 paperroach
+paperroach --version
 ```
 
 Expected final line:
@@ -154,54 +136,14 @@ Expected final line:
 paperroach 0.1.0
 ```
 
-Optional activation makes later commands shorter:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-If activation is blocked, keep using
-`.\.venv\Scripts\python.exe -m paperroach` in place of `paperroach`.
-Activate the environment again whenever you open a new terminal.
-
-### macOS or Linux
-
-```bash
-uv --version
-uv python install 3.12
-uv venv --python 3.12 .venv
-uv pip install --python .venv .
-./.venv/bin/python -m paperroach --version
-```
-
-Optional activation:
-
-```bash
-source .venv/bin/activate
-```
-
-Without activation, use `./.venv/bin/python -m paperroach` in place of
-`paperroach`.
-Activate the environment again whenever you open a new terminal.
+If uv warns that its tool executable directory is not on `PATH`, run
+`uv tool update-shell`, close the terminal, and open a new one before checking
+the version again.
 
 ## 4. Run safe first-time setup
 
-With the virtual environment activated:
-
 ```bash
 paperroach setup --pull-models
-```
-
-Without activation, use the platform-specific Python path:
-
-```powershell
-# Windows
-.\.venv\Scripts\python.exe -m paperroach setup --pull-models
-```
-
-```bash
-# macOS / Linux
-./.venv/bin/python -m paperroach setup --pull-models
 ```
 
 Setup performs the following actions:
@@ -340,21 +282,24 @@ PDFs and bibliographic metadata but does not write to the Zotero database.
 
 ## 8. Optional PDF and figure features
 
-Run these commands from the repository directory with the virtual environment
-activated.
+Reinstall the tool with the desired package extra. This keeps the same
+`paperroach` command and isolated environment.
 
 ### Scanned PDFs
 
 ```bash
-uv pip install --python .venv ".[ocr]"
+uv tool install --python 3.12 "paperroach[ocr]"
 paperroach build "scanned-paper.pdf" --ingester ocr
 ```
 
 ### Layout-aware figure extraction
 
 ```bash
-uv pip install --python .venv ".[docling]"
+uv tool install --python 3.12 "paperroach[docling]"
 ```
+
+To keep both optional feature sets, install
+`paperroach[ocr,docling]` in the same command.
 
 Add the following to the effective `kb.toml`:
 
@@ -401,44 +346,31 @@ that override before relying on the new user config.
 
 ## 10. Updating PaperRoach
 
-From the repository checkout:
-
 ```bash
-git pull
-uv pip install --python .venv --upgrade .
+uv tool upgrade paperroach
+paperroach doctor
 ```
-
-Then run `paperroach doctor` in an activated environment, or use the
-platform-specific `.venv` Python path shown above.
 
 ## Troubleshooting
 
 ### `paperroach` is not recognized
 
-The virtual environment is not activated or its console script is not on
-`PATH`. Use the module form:
-
-```powershell
-# Windows
-.\.venv\Scripts\python.exe -m paperroach --version
-```
+Add uv's tool directory to `PATH`, then open a new terminal:
 
 ```bash
-# macOS / Linux
-./.venv/bin/python -m paperroach --version
+uv tool update-shell
+uv tool list
+paperroach --version
 ```
 
 ### Python reports an unsupported version
 
-Verify the interpreter used to create `.venv`:
+Reinstall PaperRoach with a supported interpreter:
 
 ```bash
-python --version
+uv python install 3.12
+uv tool install --python 3.12 paperroach
 ```
-
-Recreate the environment with `uv python install 3.12` followed by
-`uv venv --python 3.12 .venv`. Do not reuse an environment created by Python
-3.13 or newer.
 
 ### Ollama is not found
 
@@ -494,14 +426,13 @@ PaperRoach has no telemetry. Its runtime sends inference requests only to the
 configured Ollama host. The default is localhost; a remote `ollama_host`
 receives extracted paper text and any requested figure images.
 
-Uninstall the Python package from the environment with:
+Uninstall the isolated tool environment with:
 
 ```bash
-uv pip uninstall --python .venv paperroach
+uv tool uninstall paperroach
 ```
 
-Deleting the virtual environment is another complete package removal. Neither
-action deletes generated Markdown, the user config, Ollama models, or the
+This does not delete generated Markdown, the user config, Ollama models, or the
 vault's `.kb` index. Back up the vault and review those paths separately before
 removing any retained research data.
 

@@ -201,9 +201,9 @@
           <li>
             <span class="step-number">2</span>
             <div>
-              <h3 data-copy="stepRepo">Download PaperRoach</h3>
-              <p data-copy="stepRepoBody">Clone the repository. Without Git, download and extract the ZIP, open a terminal in that folder, and start at the third command.</p>
-              <a class="zip-link" href="https://github.com/jay0n9/paperroach/archive/refs/heads/main.zip" data-copy="downloadZip">Download the main branch ZIP ↗</a>
+              <h3 data-copy="stepInstall">Install PaperRoach</h3>
+              <p data-copy="stepInstallBody">Install the published command into its own isolated environment. No repository clone or environment activation is needed.</p>
+              <a class="zip-link" href="https://pypi.org/project/paperroach/" data-copy="viewPypi">View PaperRoach on PyPI ↗</a>
             </div>
           </li>
           <li>
@@ -235,26 +235,20 @@
               <span data-copy="copy" aria-live="polite">Copy</span>
             </button>
           </div>
-          <pre id="windows-code" class="code-panel" role="tabpanel" aria-labelledby="windows-tab" tabindex="0"><code><span class="prompt">&gt;</span> git clone https://github.com/jay0n9/paperroach.git
-<span class="prompt">&gt;</span> cd paperroach
-<span class="prompt">&gt;</span> uv python install 3.12
-<span class="prompt">&gt;</span> uv venv --python 3.12 .venv
-<span class="prompt">&gt;</span> uv pip install --python .venv .
-<span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach setup --pull-models
-<span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach doctor
+          <pre id="windows-code" class="code-panel" role="tabpanel" aria-labelledby="windows-tab" tabindex="0"><code><span class="prompt">&gt;</span> uv python install 3.12
+<span class="prompt">&gt;</span> uv tool install --python 3.12 paperroach
+<span class="prompt">&gt;</span> paperroach setup --pull-models
+<span class="prompt">&gt;</span> paperroach doctor
 <span class="prompt">&gt;</span> # Paste the full path to one PDF when prompted.
 <span class="prompt">&gt;</span> $pdf = (Read-Host "PDF path").Trim().Trim('"')
-<span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach build $pdf</code></pre>
-          <pre id="unix-code" class="code-panel" role="tabpanel" aria-labelledby="unix-tab" tabindex="0" hidden><code><span class="prompt">$</span> git clone https://github.com/jay0n9/paperroach.git
-<span class="prompt">$</span> cd paperroach
-<span class="prompt">$</span> uv python install 3.12
-<span class="prompt">$</span> uv venv --python 3.12 .venv
-<span class="prompt">$</span> uv pip install --python .venv .
-<span class="prompt">$</span> ./.venv/bin/python -m paperroach setup --pull-models
-<span class="prompt">$</span> ./.venv/bin/python -m paperroach doctor
+<span class="prompt">&gt;</span> paperroach build $pdf</code></pre>
+          <pre id="unix-code" class="code-panel" role="tabpanel" aria-labelledby="unix-tab" tabindex="0" hidden><code><span class="prompt">$</span> uv python install 3.12
+<span class="prompt">$</span> uv tool install --python 3.12 paperroach
+<span class="prompt">$</span> paperroach setup --pull-models
+<span class="prompt">$</span> paperroach doctor
 <span class="prompt">$</span> # Paste the full path to one PDF when prompted.
 <span class="prompt">$</span> printf 'PDF path: '; IFS= read -r pdf
-<span class="prompt">$</span> ./.venv/bin/python -m paperroach build "$pdf"</code></pre>
+<span class="prompt">$</span> paperroach build "$pdf"</code></pre>
           <div class="terminal-result">
             <span class="check">✓</span>
             <p><strong data-copy="setupDone">Setup is repeatable and non-destructive.</strong><small data-copy="setupDoneSmall">Existing vault files and custom settings are left alone.</small></p>

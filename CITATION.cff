@@ -3,6 +3,7 @@ message: "If you use PaperRoach in research, please cite this software."
 type: software
 title: PaperRoach
 version: 0.1.0
+date-released: 2026-08-30
 authors:
   - name: UJAM Studio
 license: MIT
