@@ -1,3 +1,4 @@
+import hashlib
 import tempfile
 import unittest
 from contextlib import ExitStack, redirect_stdout
@@ -7,7 +8,8 @@ from unittest.mock import patch
 
 from kb import pipeline, rag
 from kb.config import Config
-from kb.models import PaperAnalysis, PaperClassification, PaperMetadata, doc_id_for
+from kb.models import FigureAsset, PaperAnalysis, PaperClassification, PaperMetadata, doc_id_for
+from kb.store import KBStore
 
 
 class FakeOllamaClient:
@@ -24,6 +26,21 @@ class FakeOllamaClient:
 
     def unload_llm(self):
         return None
+
+    def unload_vision(self):
+        return None
+
+    def generate_vision_json(self, _system, _user, _image_path):
+        return {
+            "figure_type": "interface_screenshot",
+            "observable_facts": ["A prototype interaction flow is visible."],
+            "interpretation": "The figure documents a user-facing workflow.",
+            "research_evidence": ["The prototype exposes a personalization step."],
+            "hci_signals": ["interactive prototype", "user workflow"],
+            "visible_text": [],
+            "uncertainties": [],
+            "importance": "critical",
+        }
 
     def embed(self, texts):
         return [self._vector(text) for text in texts]
@@ -142,6 +159,91 @@ class BuildSearchAskSmokeTests(unittest.TestCase):
                     }
                 ],
             )
+
+    def test_figure_enrichment_writes_assets_and_visual_index(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "visual-paper.pdf"
+            source.write_bytes(b"%PDF-1.4\n")
+            config = Config(
+                vault_path=root / "vault",
+                kb_dir=".kb",
+                embed_dim=4,
+                chunk_size=500,
+                chunk_overlap=50,
+                create_concept_notes=False,
+                figure_mode="describe",
+            )
+            markdown = "# Abstract\n\nA human-centered interactive prototype study."
+            observed_visual_evidence = []
+
+            def extract_figure(_path, doc_id, cfg):
+                stage = cfg.kb_path / "figure-staging" / doc_id
+                stage.mkdir(parents=True, exist_ok=True)
+                image = stage / "figure.png"
+                image.write_bytes(b"synthetic figure")
+                return [
+                    FigureAsset(
+                        figure_id=f"{doc_id}:figure:synthetic",
+                        index=1,
+                        page=2,
+                        caption="Figure 1: Personalization prototype.",
+                        image_sha256=hashlib.sha256(image.read_bytes()).hexdigest(),
+                        staging_path=image,
+                    )
+                ]
+
+            def analysis(_client, _markdown, _metadata, _config, visual_evidence=""):
+                observed_visual_evidence.append(visual_evidence)
+                return PaperAnalysis(tl_dr="A visual HCI prototype.")
+
+            patches = [
+                patch.object(pipeline, "OllamaClient", FakeOllamaClient),
+                patch.object(pipeline.ingest_mod, "ingest", return_value=markdown),
+                patch.object(pipeline.figures_mod, "extract_figures", side_effect=extract_figure),
+                patch.object(
+                    pipeline,
+                    "extract_metadata",
+                    return_value=PaperMetadata(
+                        title="Visual HCI Paper",
+                        year=2026,
+                        summary="A prototype for personalization.",
+                        tags=["hci"],
+                    ),
+                ),
+                patch.object(pipeline, "extract_analysis", side_effect=analysis),
+                patch.object(
+                    pipeline,
+                    "classify_paper",
+                    return_value=PaperClassification(primary_domain="HCI", subdomain="Interaction Design"),
+                ),
+                patch.object(
+                    pipeline.zotero,
+                    "enrich",
+                    side_effect=lambda metadata, _path, _config: metadata,
+                ),
+            ]
+
+            with ExitStack() as stack:
+                for patcher in patches:
+                    stack.enter_context(patcher)
+                with redirect_stdout(StringIO()):
+                    result = pipeline.build([source], config)
+
+            self.assertEqual(result["succeeded"], [doc_id_for(source)])
+            self.assertIn("HCI signals", observed_visual_evidence[0])
+            note = (
+                config.references_path
+                / "HCI"
+                / "Interaction Design"
+                / "Visual HCI Paper (2026).md"
+            )
+            rendered = note.read_text(encoding="utf-8")
+            self.assertIn("## Key Figures", rendered)
+            self.assertIn("![[Assets/PaperRoach/", rendered)
+            store = KBStore(config)
+            self.assertEqual(store.figures.count_rows(), 1)
+            self.assertTrue(store.search_figures([0.0, 0.0, 0.0, 1.0], 1))
 
 
 if __name__ == "__main__":

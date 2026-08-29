@@ -1,8 +1,8 @@
-"""Build orchestration: PASS A (ingest, then LLM) → model swap → PASS B.
+"""Build orchestration: ingest, visual analysis, LLM, then embeddings.
 
-    PASS A0  ingest every input → Markdown       [no Ollama model needed;
-                                                  nougat gets the GPU alone]
-    PASS A1  metadata → analysis → chunk          [Qwen3 8B resident]
+    PASS A0    ingest every input → Markdown + figure crops  [CPU]
+    PASS A0.5  describe figures                              [vision model]
+    PASS A1    metadata → analysis → chunk                   [Qwen3 8B]
        ⇄     unload LLM  ───────────────────────  [VRAM swap, once]
     PASS B   embed → link → write note → store     [bge-m3 resident]
 
@@ -17,9 +17,12 @@ import json
 import os
 import re
 import sys
+import threading
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
+from kb import figures as figures_mod
 from kb import ingest as ingest_mod
 from kb import knowledge
 from kb import obsidian
@@ -37,11 +40,13 @@ from kb.llm import (
     extract_metadata,
     metadata_classification,
     normalize_concept_key,
+    synthesize_visual_summary,
     write_concept_article,
     write_integrated_approach,
 )
 from kb.models import (
     Document,
+    FigureAsset,
     PaperAnalysis,
     PaperClassification,
     PaperMetadata,
@@ -49,7 +54,13 @@ from kb.models import (
     doc_id_for,
 )
 from kb.ollama_client import OllamaClient, OllamaError
-from kb.store import KBStore, table_names
+from kb.store import (
+    KBStore,
+    document_rows,
+    figure_doc_ids,
+    indexed_figure_rows,
+    table_names,
+)
 
 
 def _log(msg: str) -> None:
@@ -76,38 +87,74 @@ class PipelineLock:
         config: Config,
         owner: str,
         stale_seconds: float = DEFAULT_PIPELINE_LOCK_STALE_SECONDS,
+        heartbeat_interval: float | None = None,
     ) -> None:
         self.path = config.kb_path / "pipeline.lock"
         self.owner = owner
         self.stale_seconds = stale_seconds
+        self.heartbeat_interval = (
+            heartbeat_interval
+            if heartbeat_interval is not None
+            else min(60.0, max(0.1, stale_seconds / 3.0))
+        )
         self.token = f"{os.getpid()}:{time.time():.6f}:{owner}"
         self._acquired = False
+        self._heartbeat_stop = threading.Event()
+        self._heartbeat_thread: threading.Thread | None = None
 
     def __enter__(self) -> "PipelineLock":
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._acquire()
         self._acquired = True
+        self._start_heartbeat()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         self.release()
 
     def heartbeat(self) -> None:
-        """Refresh the lock timestamp while long-running daemons are alive."""
+        """Refresh the lock mtime without exposing a partial JSON payload."""
         if not self._acquired or not self._owns_lock():
             return
-        self.path.write_text(self._payload(), encoding="utf-8")
+        try:
+            os.utime(self.path, None)
+        except OSError:
+            return
 
     def release(self) -> None:
         if not self._acquired:
             return
-        self._acquired = False
+        self._stop_heartbeat()
         if not self._owns_lock():
+            self._acquired = False
             return
+        self._acquired = False
         try:
             self.path.unlink()
         except OSError:
             pass
+
+    def _start_heartbeat(self) -> None:
+        if self.heartbeat_interval <= 0:
+            return
+        self._heartbeat_stop.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            name=f"paperroach-lock-{self.owner}",
+            daemon=True,
+        )
+        self._heartbeat_thread.start()
+
+    def _stop_heartbeat(self) -> None:
+        self._heartbeat_stop.set()
+        thread = self._heartbeat_thread
+        self._heartbeat_thread = None
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=1.0)
+
+    def _heartbeat_loop(self) -> None:
+        while not self._heartbeat_stop.wait(self.heartbeat_interval):
+            self.heartbeat()
 
     def _acquire(self) -> None:
         try:
@@ -276,6 +323,18 @@ def _save_hash_ledger(config: Config, ledger: dict[str, str]) -> None:
         pass
 
 
+def _record_content_hash(ledger: dict[str, str], content_hash: str, doc_id: str) -> None:
+    """Record the current bytes for a document and retire its stale hashes.
+
+    A document id is path-based, so rebuilding a file after its contents change
+    must not leave the former bytes marked as already indexed elsewhere.
+    """
+    stale = [key for key, value in ledger.items() if value == doc_id and key != content_hash]
+    for key in stale:
+        del ledger[key]
+    ledger[content_hash] = doc_id
+
+
 # --------------------------------------------------------------------------- #
 #  Build
 # --------------------------------------------------------------------------- #
@@ -309,18 +368,54 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
     # No Ollama model is needed here, and the nougat ingester needs the GPU
     # to itself — interleaving ingest with the LLM would swap models per file.
     _log(f"PASS A0 · ingest · {len(inputs)} input(s)")
-    ingested: list[tuple[Path, str, str]] = []  # (path, kind, markdown)
+    # (path, kind, markdown, figures, figure extraction completed)
+    ingested: list[tuple[Path, str, str, list[FigureAsset], bool]] = []
     for i, path in enumerate(inputs, 1):
         _log(f"  [{i}/{len(inputs)}] {path.name}")
         try:
             kind = ingest_mod.kind_of(path)
             markdown = ingest_mod.ingest(path, config)
-            ingested.append((path, kind, markdown))
+            extracted_figures: list[FigureAsset] = []
+            figure_extraction_complete = False
+            if kind == "pdf" and config.figure_mode != "off":
+                _log("      · extracting figures …")
+                try:
+                    extracted_figures = figures_mod.extract_figures(
+                        path, doc_id_for(path), config
+                    )
+                    figure_extraction_complete = True
+                    _log(f"      · {len(extracted_figures)} figure asset(s) extracted")
+                except Exception as exc:
+                    # Figure parsing is optional: preserve text-only ingestion
+                    # when a Docling or image-processing problem occurs.
+                    _log(f"      ! figure extraction failed: {exc}")
+            ingested.append(
+                (path, kind, markdown, extracted_figures, figure_extraction_complete)
+            )
         except Exception as exc:  # one bad file shouldn't sink the batch
             _log(f"      ! ingest failed: {exc}")
     if not ingested:
         _log("Nothing ingested successfully.")
         return {"processed": 0, "succeeded": []}
+
+    if config.figure_mode == "describe":
+        figure_total = sum(len(figures) for _, _, _, figures, _ in ingested)
+        if figure_total:
+            _log(
+                f"PASS A0.5 · vision ({config.vision_model}) · "
+                f"{figure_total} figure(s)"
+            )
+            # The vision model is the only model allowed on the GPU in this pass.
+            client.unload_llm()
+            client.unload_embed()
+            for path, _kind, _markdown, figures, _complete in ingested:
+                if not figures:
+                    continue
+                described, errors = figures_mod.describe_figures(figures, client, config)
+                _log(f"  · {path.name}: described {described}/{len(figures)} figure(s)")
+                for error in errors[:3]:
+                    _log(f"      ! {error}")
+            client.unload_vision()
 
     # ── PASS A1 ── LLM resident ─────────────────────────────────────
     _log(f"PASS A1 · LLM ({config.llm_model}) · {len(ingested)} document(s)")
@@ -328,7 +423,8 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
     known_subjects = sorted(set(knowledge.list_subjects(config)) | set(taxonomy.domain_names()))
     tag_registry = tags_mod.load_registry(config)
     docs: list[Document] = []
-    for i, (path, kind, markdown) in enumerate(ingested, 1):
+    figure_sync_by_doc_id: dict[str, bool] = {}
+    for i, (path, kind, markdown, figures, figure_extraction_complete) in enumerate(ingested, 1):
         _log(f"  [{i}/{len(ingested)}] {path.name}")
         try:
             _log("      · extracting metadata …")
@@ -353,9 +449,12 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                 metadata.subdomain = meta_subdomain
             if metadata.subdomain:
                 _log(f"      · metadata subdomain: {metadata.subdomain}")
+            visual_evidence = figures_mod.figure_evidence(figures)
             _log("      · analysing paper …")
             try:
-                analysis = extract_analysis(client, markdown, metadata, config)
+                analysis = extract_analysis(
+                    client, markdown, metadata, config, visual_evidence=visual_evidence
+                )
             except Exception as exc:
                 _log(f"      · analysis failed ({exc}); writing note without it")
                 analysis = PaperAnalysis()
@@ -364,7 +463,13 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                 _log("      · classifying paper domain …")
                 try:
                     classification = classify_paper(
-                        client, markdown, metadata, analysis, config, known_subjects
+                        client,
+                        markdown,
+                        metadata,
+                        analysis,
+                        config,
+                        known_subjects,
+                        visual_evidence=visual_evidence,
                     )
                 except Exception as exc:
                     classification = _fallback_paper_classification(
@@ -457,11 +562,15 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
                 classification=classification,
                 equations=equations,
                 equations_integrated=equations_integrated,
+                figures=figures,
+                figures_synced=figure_extraction_complete,
             )
+            figure_sync_by_doc_id[doc.doc_id] = figure_extraction_complete
             obsidian.assign_note_location(doc, config)
             _log(f"      · '{metadata.title}' — {len(chunks)} chunk(s)")
             docs.append(doc)
         except Exception as exc:  # one bad file shouldn't sink the batch
+            figures_mod.discard_staged_assets(figures)
             _log(f"      ! failed: {exc}")
 
     if not docs:
@@ -480,19 +589,30 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
         r["doc_id"]: r.get("note_path", "")
         for r in store.all_docs(columns=["doc_id", "note_path"])
     }
-    embedded: list[tuple[Document, list[list[float]], list[float]]] = []
+    embedded: list[tuple[Document, list[list[float]], list[float], list[list[float]]]] = []
     for i, doc in enumerate(docs, 1):
         _log(f"  [{i}/{len(docs)}] embedding {doc.metadata.title}")
         try:
-            # One request for chunks + summary (the last vector is the summary).
+            # One request for prose chunks, the paper summary, and visual
+            # evidence. All use the existing text embedding model.
             summary_text = doc.metadata.summary or doc.metadata.title
-            vectors = client.embed([c.text for c in doc.chunks] + [summary_text])
-            chunk_vectors, summary_vector = vectors[:-1], vectors[-1]
+            figure_texts = [figure.searchable_text() for figure in doc.figures]
+            visual_summary = figures_mod.figure_evidence(doc.figures, max_chars=1200)
+            if visual_summary:
+                summary_text = f"{summary_text}\n\nVisual evidence:\n{visual_summary}"
+            chunk_count = len(doc.chunks)
+            vectors = client.embed(
+                [c.text for c in doc.chunks] + [summary_text] + figure_texts
+            )
+            chunk_vectors = vectors[:chunk_count]
+            summary_vector = vectors[chunk_count]
+            figure_vectors = vectors[chunk_count + 1:]
             doc.summary_vector = summary_vector
-            embedded.append((doc, chunk_vectors, summary_vector))
+            embedded.append((doc, chunk_vectors, summary_vector, figure_vectors))
         except Exception as exc:
             # One transient failure must not discard the whole batch's PASS A
             # work — skip this document; a later run picks it up again.
+            figures_mod.discard_staged_assets(doc.figures)
             _log(f"      ! embedding failed: {exc}")
     if not embedded:
         _log("No document could be embedded.")
@@ -500,7 +620,7 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
 
     # ── ⑥ related-literature linking ────────────────────────────────
     _log("  linking related literature …")
-    for doc, _chunk_vectors, _summary_vector in embedded:
+    for doc, _chunk_vectors, _summary_vector, _figure_vectors in embedded:
         related = store.related_for_vector(
             doc.summary_vector,
             exclude_doc_id=doc.doc_id,
@@ -513,9 +633,12 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
     written = 0
     concept_paths: list[Path] = []
     stored: list[Document] = []
-    for doc, chunk_vectors, summary_vector in embedded:
+    for doc, chunk_vectors, summary_vector, figure_vectors in embedded:
         try:
             if doc.kind == "pdf":
+                if figure_sync_by_doc_id.get(doc.doc_id):
+                    if doc.figures:
+                        figures_mod.finalize_assets(doc.figures, doc.doc_id, config)
                 obsidian.write_generated_note(doc, doc.related, config)
                 written += 1
             elif config.rewrite_source_notes:
@@ -529,12 +652,18 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
 
         try:
             store.upsert_document(doc, chunk_vectors, summary_vector)
+            if (
+                figure_sync_by_doc_id.get(doc.doc_id)
+                and doc.figures
+                and hasattr(store, "replace_figures")
+            ):
+                store.replace_figures(doc, figure_vectors)
             if doc.kind == "pdf":
                 _cleanup_orphan(old_note_paths.get(doc.doc_id, ""), doc.note_path)
             stored.append(doc)
             h = hash_by_id.get(doc.doc_id)
             if h:
-                ledger[h] = doc.doc_id
+                _record_content_hash(ledger, h, doc.doc_id)
             if doc.kind == "pdf":
                 try:
                     touched = knowledge.write_concept_notes(doc, config)
@@ -582,6 +711,399 @@ def build(paths: list[Path], config: Config, recursive: bool = False) -> dict:
         "succeeded": [d.doc_id for d in docs],
         "skipped_duplicates": dup_ids,
     }
+
+
+def enrich_figures(
+    config: Config, apply: bool = False, limit: int | None = None, force: bool = False
+) -> dict:
+    """Backfill visual evidence into existing generated PDF notes.
+
+    Re-running ``build`` intentionally skips already-indexed PDFs. This command
+    uses each note's ``kb-source`` frontmatter path instead, preserving the
+    existing prose analysis and personal notes while updating only Key Figures
+    and the figure vector index.
+    """
+    if config.figure_mode == "off":
+        _log("Figure mode is off. Pass --figure-mode extract or describe.")
+        return {"eligible": 0, "updated": 0, "blocked": 0, "needs_mode": True}
+    if limit is not None and limit < 1:
+        raise ValueError(f"limit must be at least 1 (got {limit})")
+
+    candidates, blocked, already_indexed = _figure_backfill_candidates(config, force=force)
+    if limit is not None:
+        candidates = candidates[:limit]
+    _log(
+        f"Figure backfill: {len(candidates)} eligible PDF note(s), "
+        f"{already_indexed} already indexed, {len(blocked)} blocked."
+    )
+    for row, _source, _note in candidates[:8]:
+        _log(f"  - {row.get('title') or row['doc_id']}")
+    if len(candidates) > 8:
+        _log(f"  ... and {len(candidates) - 8} more")
+    if blocked:
+        for title, reason in blocked[:5]:
+            _log(f"  ! skipped {title}: {reason}")
+    if not apply:
+        _log("Dry run -- nothing changed. Re-run with --apply to enrich notes.")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_indexed": already_indexed,
+        }
+    if not candidates:
+        return {
+            "eligible": 0,
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_indexed": already_indexed,
+        }
+
+    config.ensure_dirs()
+    store = KBStore(config)
+    client = OllamaClient(config)
+    try:
+        client.ping()
+    except OllamaError as exc:
+        _log(f"  ! {exc}")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_indexed": already_indexed,
+        }
+
+    extracted: list[tuple[dict, Path, Path, list[FigureAsset]]] = []
+    for index, (row, source, note) in enumerate(candidates, 1):
+        title = str(row.get("title") or source.stem)
+        _log(f"  [{index}/{len(candidates)}] extracting {title}")
+        try:
+            figures = figures_mod.extract_figures(source, row["doc_id"], config)
+        except Exception as exc:
+            _log(f"      ! figure extraction failed: {exc}")
+            continue
+        if not figures:
+            _log("      · no supported figure assets found; preserving prior state")
+            continue
+        _log(f"      · {len(figures)} figure asset(s) extracted")
+        extracted.append((row, source, note, figures))
+
+    if not extracted:
+        _log("No existing note could be enriched.")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_indexed": already_indexed,
+        }
+
+    if config.figure_mode == "describe":
+        total = sum(len(figures) for _row, _source, _note, figures in extracted)
+        _log(f"  describing {total} figure(s) with {config.vision_model} …")
+        client.unload_llm()
+        client.unload_embed()
+        try:
+            for row, _source, _note, figures in extracted:
+                described, errors = figures_mod.describe_figures(figures, client, config)
+                _log(f"      · {row.get('title') or row['doc_id']}: {described}/{len(figures)}")
+                for error in errors[:3]:
+                    _log(f"        ! {error}")
+        finally:
+            client.unload_vision()
+
+    client.unload_llm()
+    embedded: list[tuple[dict, Path, Path, list[FigureAsset], list[list[float]]]] = []
+    for row, source, note, figures in extracted:
+        try:
+            vectors = client.embed([figure.searchable_text() for figure in figures])
+            embedded.append((row, source, note, figures, vectors))
+        except Exception as exc:
+            figures_mod.discard_staged_assets(figures)
+            _log(f"      ! figure embedding failed for {row.get('title') or row['doc_id']}: {exc}")
+    client.unload_embed()
+
+    updated = 0
+    notes_written = 0
+    for row, source, note, figures, vectors in embedded:
+        title = str(row.get("title") or source.stem)
+        try:
+            figures_mod.finalize_assets(figures, row["doc_id"], config)
+            if obsidian.update_figures_in_file(note, figures):
+                notes_written += 1
+            doc = Document(
+                doc_id=row["doc_id"],
+                source_path=source,
+                kind="pdf",
+                markdown="",
+                metadata=PaperMetadata(
+                    title=title,
+                    authors=[str(author) for author in (row.get("authors") or [])],
+                    year=row.get("year") if isinstance(row.get("year"), int) else None,
+                ),
+                figures=figures,
+                figures_synced=True,
+            )
+            doc.note_path = note
+            store.replace_figures(doc, vectors)
+            updated += 1
+        except Exception as exc:
+            _log(f"      ! figure update failed for {title}: {exc}")
+
+    store.optimize()
+    _log(f"Figure backfill complete: {updated} paper(s), {notes_written} note(s) updated.")
+    return {
+        "eligible": len(candidates),
+        "updated": updated,
+        "notes_written": notes_written,
+        "blocked": len(blocked),
+        "already_indexed": already_indexed,
+    }
+
+
+def integrate_figures(
+    config: Config, apply: bool = False, limit: int | None = None, force: bool = False
+) -> dict:
+    """Weave indexed visual evidence into existing generated study notes.
+
+    This is deliberately separate from figure extraction: it reuses the
+    reviewed figure descriptions already stored in LanceDB and changes only
+    managed inline visual-evidence blocks inside the relevant study sections.
+    Existing analysis and user content remain intact.
+    """
+    if limit is not None and limit < 1:
+        raise ValueError(f"limit must be at least 1 (got {limit})")
+
+    candidates, blocked, already_integrated = _visual_synthesis_candidates(
+        config, force=force
+    )
+    if limit is not None:
+        candidates = candidates[:limit]
+    _log(
+        f"Visual-summary integration: {len(candidates)} eligible note(s), "
+        f"{already_integrated} already integrated, {len(blocked)} blocked."
+    )
+    for row, _note, _figure_rows in candidates[:8]:
+        _log(f"  - {row.get('title') or row['doc_id']}")
+    if len(candidates) > 8:
+        _log(f"  ... and {len(candidates) - 8} more")
+    for title, reason in blocked[:5]:
+        _log(f"  ! skipped {title}: {reason}")
+    if not apply:
+        _log("Dry run -- nothing changed. Re-run with --apply to integrate figures.")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_integrated": already_integrated,
+        }
+    if not candidates:
+        return {
+            "eligible": 0,
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_integrated": already_integrated,
+        }
+
+    client = OllamaClient(config)
+    try:
+        client.ping()
+    except OllamaError as exc:
+        _log(f"  ! {exc}")
+        return {
+            "eligible": len(candidates),
+            "updated": 0,
+            "blocked": len(blocked),
+            "already_integrated": already_integrated,
+        }
+
+    client.unload_embed()
+    client.unload_vision()
+    updated = 0
+    no_synthesis = 0
+    try:
+        for index, (row, note, rows) in enumerate(candidates, 1):
+            title = str(row.get("title") or row["doc_id"])
+            _log(f"  [{index}/{len(candidates)}] synthesizing {title}")
+            figures = _figure_assets_from_index(rows)
+            summary = obsidian.generated_summary_context(note)
+            visual_evidence = _figure_evidence_from_index(rows)
+            try:
+                synthesis = synthesize_visual_summary(
+                    client,
+                    title,
+                    summary,
+                    visual_evidence,
+                    [figure.index for figure in figures],
+                    config,
+                )
+            except Exception as exc:
+                _log(f"      ! visual synthesis failed: {exc}")
+                continue
+            if not synthesis:
+                no_synthesis += 1
+                _log("      ! no sufficiently grounded visual synthesis returned")
+                continue
+            if obsidian.update_visual_synthesis_in_file(note, synthesis, figures):
+                updated += 1
+                _log(f"      · integrated {len(synthesis)} figure-grounded finding(s)")
+            else:
+                _log("      ! visual synthesis could not be written safely")
+    finally:
+        client.unload_llm()
+
+    _log(
+        f"Visual-summary integration complete: {updated} note(s) updated; "
+        f"{no_synthesis} note(s) had no grounded findings."
+    )
+    return {
+        "eligible": len(candidates),
+        "updated": updated,
+        "blocked": len(blocked),
+        "already_integrated": already_integrated,
+        "no_synthesis": no_synthesis,
+    }
+
+
+def _visual_synthesis_candidates(
+    config: Config, force: bool = False
+) -> tuple[list[tuple[dict, Path, list[dict]]], list[tuple[str, str]], int]:
+    """Find generated PDF notes with indexed figures but no visual synthesis."""
+    figure_rows = indexed_figure_rows(
+        config,
+        columns=[
+            "doc_id",
+            "figure_id",
+            "figure_index",
+            "page",
+            "source_kind",
+            "asset_path",
+            "caption",
+            "figure_type",
+            "importance",
+            "text",
+        ],
+    )
+    by_doc_id: dict[str, list[dict]] = {}
+    for figure_row in figure_rows:
+        by_doc_id.setdefault(str(figure_row.get("doc_id") or ""), []).append(figure_row)
+
+    candidates: list[tuple[dict, Path, list[dict]]] = []
+    blocked: list[tuple[str, str]] = []
+    already_integrated = 0
+    for row in document_rows(
+        config, columns=["doc_id", "title", "kind", "note_path"]
+    ):
+        if row.get("kind") != "pdf":
+            continue
+        title = str(row.get("title") or row["doc_id"])
+        note_value = str(row.get("note_path") or "").strip()
+        note = Path(note_value) if note_value else None
+        if note is None or not note.exists():
+            blocked.append((title, "generated note is missing"))
+            continue
+        if not obsidian.is_generated_note(note):
+            blocked.append((title, "note is not PaperRoach-generated"))
+            continue
+        rows = sorted(
+            by_doc_id.get(str(row["doc_id"]), []),
+            key=_indexed_figure_index,
+        )
+        if not rows:
+            blocked.append((title, "indexed figures are unavailable"))
+            continue
+        if not force and obsidian.has_visual_synthesis(note):
+            already_integrated += 1
+            continue
+        if not obsidian.generated_summary_context(note):
+            blocked.append((title, "generated study summary is unavailable"))
+            continue
+        missing_assets = [
+            str(item.get("asset_path") or "")
+            for item in rows
+            if not str(item.get("asset_path") or "")
+            or not (config.vault_path / str(item.get("asset_path") or "")).is_file()
+        ]
+        if missing_assets:
+            blocked.append((title, "one or more indexed figure assets are missing"))
+            continue
+        candidates.append((row, note, rows))
+    return candidates, blocked, already_integrated
+
+
+def _indexed_figure_index(row: dict) -> int:
+    """Return a safe figure index for ordering partially corrupted store rows."""
+    try:
+        return int(row.get("figure_index") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _figure_assets_from_index(rows: list[dict]) -> list[FigureAsset]:
+    """Rehydrate the fields needed to render indexed figures inside a note."""
+    figures: list[FigureAsset] = []
+    for row in rows:
+        figure_index = _indexed_figure_index(row)
+        if figure_index < 1:
+            continue
+        figures.append(
+            FigureAsset(
+                figure_id=str(row.get("figure_id") or f"figure:{figure_index}"),
+                index=figure_index,
+                page=int(row.get("page") or 0),
+                source_kind=str(row.get("source_kind") or "figure"),
+                caption=str(row.get("caption") or ""),
+                asset_relpath=str(row.get("asset_path") or ""),
+                figure_type=str(row.get("figure_type") or ""),
+                importance=str(row.get("importance") or "supporting"),
+            )
+        )
+    return sorted(figures, key=lambda figure: figure.index)
+
+
+def _figure_evidence_from_index(rows: list[dict]) -> str:
+    """Bound indexed figure evidence before it becomes an LLM input."""
+    blocks = [str(row.get("text") or "").strip() for row in rows]
+    return "\n\n".join(block for block in blocks if block)[:6000]
+
+
+def _figure_backfill_candidates(
+    config: Config,
+    force: bool = False,
+) -> tuple[list[tuple[dict, Path, Path]], list[tuple[str, str]], int]:
+    """Find generated PDF notes whose original source PDF still exists."""
+    rows = document_rows(
+        config,
+        columns=["doc_id", "title", "authors", "year", "kind", "note_path"],
+    )
+    candidates: list[tuple[dict, Path, Path]] = []
+    blocked: list[tuple[str, str]] = []
+    indexed = set() if force else figure_doc_ids(config)
+    already_indexed = 0
+    for row in rows:
+        if row.get("kind") != "pdf":
+            continue
+        title = str(row.get("title") or row["doc_id"])
+        if row["doc_id"] in indexed:
+            already_indexed += 1
+            continue
+        note_value = str(row.get("note_path") or "").strip()
+        note = Path(note_value) if note_value else None
+        if note is None or not note.exists():
+            blocked.append((title, "generated note is missing"))
+            continue
+        if not obsidian.is_generated_note(note):
+            blocked.append((title, "note is not PaperRoach-generated"))
+            continue
+        source_value = obsidian._read_frontmatter(note).get("kb-source")
+        if not isinstance(source_value, str) or not source_value.strip():
+            blocked.append((title, "kb-source frontmatter is missing"))
+            continue
+        source = Path(source_value).expanduser()
+        if not source.exists() or not source.is_file() or source.suffix.lower() != ".pdf":
+            blocked.append((title, "source PDF is unavailable"))
+            continue
+        candidates.append((row, source, note))
+    return candidates, blocked, already_indexed
 
 
 def _refresh_related_links(docs: list[Document], store: KBStore, config: Config) -> None:
@@ -757,11 +1279,16 @@ def refile_references(
                 domain_of[p.stem.lower()] = rel[0]
     candidates = sorted(set(domain_of.values()) | set(taxonomy.domain_names()))
 
-    store = KBStore(config)
-    path_to_id = {
-        (r.get("note_path") or ""): r["doc_id"]
-        for r in store.all_docs(columns=["doc_id", "note_path"])
-    }
+    # A dry-run is a pure filesystem plan. It must not create a vector store
+    # merely to collect note-path bookkeeping used only by --apply.
+    store: KBStore | None = None
+    path_to_id: dict[str, str] = {}
+    if apply:
+        store = KBStore(config)
+        path_to_id = {
+            (r.get("note_path") or ""): r["doc_id"]
+            for r in store.all_docs(columns=["doc_id", "note_path"])
+        }
 
     moves: list[tuple[Path, Path, str, str]] = []
     plan_rows: list[dict[str, str]] = []
@@ -814,7 +1341,7 @@ def refile_references(
         _ensure_paper_classification_frontmatter(dest, subject, subdomain)
         moved += 1
         doc_id = path_to_id.get(old_str)
-        if doc_id:
+        if doc_id and store is not None:
             try:
                 store.update_note_path(doc_id, str(dest))
             except Exception as exc:
@@ -962,7 +1489,7 @@ def _write_refile_plan(
             )
             + " |"
         )
-    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    obsidian.write_text_atomic(path, "\n".join(lines).rstrip() + "\n")
     _log(f"Refile review plan written -> {path}")
     return path
 
@@ -1069,7 +1596,9 @@ def _ensure_paper_classification_frontmatter(
         changed = True
     if not changed:
         return False
-    note.write_text(f"---\n{obsidian._dump_yaml(fm).rstrip()}\n---\n{body}", encoding="utf-8")
+    obsidian.write_text_atomic(
+        note, f"---\n{obsidian._dump_yaml(fm).rstrip()}\n---\n{body}"
+    )
     return True
 
 
@@ -1323,15 +1852,68 @@ def retag_concepts(config: Config, apply: bool = False) -> dict:
     return {"updated": updated}
 
 
+def _generated_source_hash(row: dict) -> str | None:
+    """Return a duplicate-proof hash for a generated PDF note, if available."""
+    if row.get("kind") != "pdf":
+        return None
+    note_value = str(row.get("note_path") or "").strip()
+    if not note_value:
+        return None
+    note = Path(note_value)
+    if not note.exists() or not obsidian.is_generated_note(note):
+        return None
+    source = obsidian._read_frontmatter(note).get("kb-source")
+    if not isinstance(source, str) or not source.strip():
+        return None
+    return content_hash_for(Path(source).expanduser())
+
+
+def _duplicate_rows(docs: list[dict], orphan_ids: set[str]) -> tuple[list[dict], list[dict]]:
+    """Return confirmed duplicates plus possible title/year matches.
+
+    A matching title/year only identifies candidates. Automatic removal requires
+    generated PDF notes whose source files still have identical bytes.
+    """
+    by_title_year: dict[tuple[str, object], list[dict]] = {}
+    for row in docs:
+        if row["doc_id"] in orphan_ids:
+            continue
+        title = str(row.get("title") or "").strip().lower()
+        if title:
+            by_title_year.setdefault((title, row.get("year")), []).append(row)
+
+    confirmed: list[dict] = []
+    possible: list[dict] = []
+    for rows in by_title_year.values():
+        if len(rows) < 2:
+            continue
+        by_hash: dict[str, list[dict]] = {}
+        for row in rows:
+            source_hash = _generated_source_hash(row)
+            if source_hash:
+                by_hash.setdefault(source_hash, []).append(row)
+
+        proven_ids: set[str] = set()
+        for same_content in by_hash.values():
+            if len(same_content) < 2:
+                continue
+            ordered = sorted(
+                same_content,
+                key=lambda row: (len(str(row.get("note_path") or "")), row["doc_id"]),
+            )
+            proven_ids.update(row["doc_id"] for row in ordered)
+            confirmed.extend(ordered[1:])
+        possible.extend(row for row in rows if row["doc_id"] not in proven_ids)
+    return confirmed, possible
+
+
 def gc(config: Config, apply: bool = False) -> dict:
-    """Report (and with ``apply`` remove) stale store rows and duplicate docs.
+    """Report (and with ``apply`` remove) stale rows and proven duplicates.
 
     * doc/concept rows whose note file no longer exists (deleted or renamed
       outside the pipeline) — these otherwise haunt related-links forever.
-    * documents whose (title, year) duplicate another's (e.g. the same PDF
-      ingested from two Zotero storage folders before content dedup existed);
-      the copy with the extra " (2)"-style filename is dropped, including its
-      generated note.
+    * generated PDF notes whose source bytes match exactly. Title/year matches
+      without that proof remain visible for manual review and are never deleted.
     """
     if not table_names(config):
         _log("Store is not initialized -- nothing to clean.")
@@ -1348,19 +1930,7 @@ def gc(config: Config, apply: bool = False) -> dict:
     ]
     orphan_ids = {r["doc_id"] for r in orphans}
 
-    by_key: dict[tuple, list[dict]] = {}
-    for r in docs:
-        if r["doc_id"] in orphan_ids:
-            continue
-        title = (r.get("title") or "").strip().lower()
-        if title:
-            by_key.setdefault((title, r.get("year")), []).append(r)
-    dups: list[dict] = []
-    for rows in by_key.values():
-        if len(rows) > 1:
-            # Keep the shortest note path — "X (2025).md" over "X (2025) (2).md".
-            rows = sorted(rows, key=lambda r: (len(r.get("note_path") or ""), r["doc_id"]))
-            dups.extend(rows[1:])
+    dups, possible_dups = _duplicate_rows(docs, orphan_ids)
 
     concept_orphans = [
         r for r in store.all_concepts()
@@ -1370,23 +1940,31 @@ def gc(config: Config, apply: bool = False) -> dict:
     _log(f"Orphaned document rows : {len(orphans)}")
     for r in orphans:
         _log(f"  - {r.get('title') or r['doc_id']}  (note missing: {r.get('note_path')})")
-    _log(f"Duplicate documents    : {len(dups)}")
+    _log(f"Confirmed duplicates  : {len(dups)}")
     for r in dups:
+        _log(f"  - {r.get('title')}  ({r.get('note_path')})")
+    _log(f"Possible title matches: {len(possible_dups)}")
+    for r in possible_dups:
         _log(f"  - {r.get('title')}  ({r.get('note_path')})")
     _log(f"Orphaned concept rows  : {len(concept_orphans)}")
     for r in concept_orphans:
         _log(f"  - {r.get('name')}  (note missing: {r.get('note_path')})")
 
-    if not (orphans or dups or concept_orphans):
-        _log("Store is clean.")
-        return {"removed": 0}
+    cleanup_candidates = orphans or dups or concept_orphans
+    if not cleanup_candidates:
+        if possible_dups:
+            _log("No confirmed cleanup candidates. Review possible title matches manually.")
+        else:
+            _log("Store is clean.")
+        return {"removed": 0, "possible_duplicates": len(possible_dups)}
     if not apply:
         _log("\nDry run — nothing deleted. Re-run `paperroach gc --apply` to clean up.")
-        return {"removed": 0}
+        return {"removed": 0, "possible_duplicates": len(possible_dups)}
 
     removed = 0
     for r in orphans:
         store.delete_doc(r["doc_id"])
+        figures_mod.delete_document_assets(r["doc_id"], config)
         removed += 1
     for r in dups:
         note_path = Path(r["note_path"]) if r.get("note_path") else None
@@ -1395,15 +1973,17 @@ def gc(config: Config, apply: bool = False) -> dict:
                 note_path.unlink()
                 _log(f"  · removed duplicate note: {note_path.name}")
             except OSError:
-                pass
+                _log(f"  ! could not remove duplicate note: {note_path}")
+                continue
         store.delete_doc(r["doc_id"])
+        figures_mod.delete_document_assets(r["doc_id"], config)
         removed += 1
     for r in concept_orphans:
         store.delete_concept(r["concept_id"])
         removed += 1
     store.optimize()
     _log(f"Removed {removed} stale/duplicate entr(ies).")
-    return {"removed": removed}
+    return {"removed": removed, "possible_duplicates": len(possible_dups)}
 
 
 def watch(config: Config, scan_only: bool = False) -> dict:
@@ -1426,9 +2006,13 @@ def watch(config: Config, scan_only: bool = False) -> dict:
     # the same notes/store, so they coordinate through one lock file.
     fresh_window = max(60.0, config.watch_interval * 5.0)
     try:
-        with PipelineLock(config, "watch", stale_seconds=fresh_window) as lock:
+        # The watcher only holds the writer lock while it initializes or builds.
+        # Keeping it for the full daemon lifetime blocks unrelated manual work.
+        with nullcontext():
             _MAX_ATTEMPTS = 3
-            seen = {r["doc_id"] for r in KBStore(config).all_docs(columns=["doc_id"])}
+            # Refresh stored ids only after acquiring the short-lived build lock.
+            # This lets a long-running watcher coexist with manual writers.
+            seen: set[str] = set()
             attempts: dict[str, int] = {}  # doc_id -> failed build attempts
             storage = data_dir / "storage"
             _log(f"Zotero data dir : {data_dir}")
@@ -1452,8 +2036,22 @@ def watch(config: Config, scan_only: bool = False) -> dict:
                     _log(f"\nDetected {len(new)} new PDF(s) in Zotero:")
                     for p in new:
                         _log(f"  + {p.name}")
+                    locked = False
                     try:
-                        result = build(new, config)
+                        with PipelineLock(
+                            config, "watch-build", stale_seconds=fresh_window
+                        ):
+                            current_seen = {
+                                row["doc_id"]
+                                for row in KBStore(config).all_docs(columns=["doc_id"])
+                            }
+                            seen |= current_seen
+                            batch = [p for p in new if doc_id_for(p) not in seen]
+                            result = build(batch, config) if batch else {"succeeded": []}
+                    except PipelineLockError as exc:
+                        _log(f"  ! writer is busy ({exc}); will retry")
+                        result = {"succeeded": []}
+                        locked = True
                     except Exception as exc:
                         # The watcher daemon must survive anything a build throws.
                         _log(f"  ! build failed: {exc}")
@@ -1463,20 +2061,22 @@ def watch(config: Config, scan_only: bool = False) -> dict:
                     # Content-duplicates count as done too.
                     succeeded = set(result.get("succeeded") or [])
                     seen |= succeeded | set(result.get("skipped_duplicates") or [])
-                    for p in new:
-                        did = doc_id_for(p)
-                        if did not in seen:
-                            attempts[did] = attempts.get(did, 0) + 1
-                            if attempts[did] == _MAX_ATTEMPTS:
-                                _log(
-                                    f"  ! giving up on {p.name} after "
-                                    f"{_MAX_ATTEMPTS} attempts"
-                                )
+                    if not locked:
+                        for p in new:
+                            did = doc_id_for(p)
+                            if did not in seen:
+                                attempts[did] = attempts.get(did, 0) + 1
+                                if attempts[did] == _MAX_ATTEMPTS:
+                                    _log(
+                                        f"  ! giving up on {p.name} after "
+                                        f"{_MAX_ATTEMPTS} attempts"
+                                    )
                     total += len(succeeded)
+                    if locked and scan_only:
+                        return {"processed": total, "locked": True}
                 if scan_only:
                     _log(f"Scan complete. {total} new document(s) processed.")
                     return {"processed": total}
-                lock.heartbeat()
                 time.sleep(config.watch_interval)
     except PipelineLockError as exc:
         _log(str(exc))
@@ -1516,7 +2116,7 @@ def integrate_note_equations(path: Path, client: OllamaClient, config: Config) -
     # remove the now-redundant Key Equations section (also when it is the
     # last section of the note — hence the \Z alternative)
     text = re.sub(r"(?ms)\n## Key Equations\b.*?(?=\n## |\Z)", "\n", text, count=1)
-    path.write_text(obsidian.fix_inline_math(text), encoding="utf-8")
+    obsidian.write_text_atomic(path, obsidian.fix_inline_math(text))
     return True
 
 
@@ -1535,7 +2135,7 @@ def fix_math_in_all_notes(config: Config) -> int:
             original = obsidian._read_text_tolerant(p)
             new = obsidian.fix_inline_math(original)
             if new != original:
-                p.write_text(new, encoding="utf-8")
+                obsidian.write_text_atomic(p, new)
                 fixed += 1
     return fixed
 

@@ -27,15 +27,22 @@ Run the same checks as CI:
 python -m unittest discover -s tests -v
 python -m compileall -q kb paperroach tests
 python -m pip wheel . --no-deps -w dist
+python scripts/smoke_wheel.py dist
 python -m paperroach --version
 ```
 
 For a release that changes ingestion, Zotero enrichment, note rendering, or the
-LanceDB store, also run one manual build against a disposable vault.
+LanceDB store, also run one manual build against a disposable vault. For a
+figure-aware release, use a PDF with an embedded image and verify the vault
+asset, `## Key Figures` note section, and figure search result.
 
 If the release changes LanceDB table schemas, generated frontmatter fields, or
 embedding compatibility, document whether users must rebuild `<vault>/.kb` or
 can run an in-place migration.
+
+If setup, supported Python versions, optional dependencies, or model defaults
+change, repeat the applicable path in `INSTALL.md` and update the guide in the
+same release.
 
 ## Tagging
 

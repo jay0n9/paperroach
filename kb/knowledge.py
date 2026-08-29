@@ -29,6 +29,7 @@ from kb.obsidian import (
     safe_note_name,
     split_frontmatter,
     wikilink,
+    write_text_atomic,
 )
 
 _SOURCE_HEADING = "## Source"
@@ -102,9 +103,9 @@ def _write_one(
         return existing
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{_safe_name(name)}.md"
-    path.write_text(
+    write_text_atomic(
+        path,
         fix_inline_math(_render_concept(name, concept, subject, paper_link)),
-        encoding="utf-8",
     )
     index[path.stem.lower()] = path
     return path
@@ -194,7 +195,7 @@ def _set_parent_if_missing(path: Path, parent: str) -> bool:
     dumped = dumped.replace("Status: null", "Status:")
     new_text = f"---\n{dumped}\n---\n{body}"
     if new_text != text:
-        path.write_text(new_text, encoding="utf-8")
+        write_text_atomic(path, new_text)
         return True
     return False
 
@@ -225,7 +226,7 @@ def fill_concept_notes(client, config: Config) -> int:
         original = _read_text_tolerant(p)
         new = fix_inline_math(_replace_body(original, article))
         if new != original:
-            p.write_text(new, encoding="utf-8")
+            write_text_atomic(p, new)
             filled += 1
     return filled
 
@@ -307,7 +308,7 @@ def _ensure_list_props(
     dumped = dumped.replace("Status: null", "Status:")
     new_text = f"---\n{dumped}\n---\n{body}"
     if new_text != text:
-        path.write_text(new_text, encoding="utf-8")
+        write_text_atomic(path, new_text)
         return True
     return False
 
@@ -391,7 +392,7 @@ def _append_source_link(path: Path, paper_link: str) -> bool:
         updated = text[: m.end()] + f"\n{bullet}" + text[m.end():]
     else:
         updated = text.rstrip() + f"\n\n{_SOURCE_HEADING}\n{bullet}\n"
-    path.write_text(updated, encoding="utf-8")
+    write_text_atomic(path, updated)
     return True
 
 
@@ -528,7 +529,7 @@ def _write_related_concepts(path: Path, names: list[str]) -> bool:
         else:
             updated = text.rstrip() + f"\n\n{_RC_HEADING}\n\n{block}\n"
     if updated != text:
-        path.write_text(updated, encoding="utf-8")
+        write_text_atomic(path, updated)
         return True
     return False
 

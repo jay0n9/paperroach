@@ -7,19 +7,49 @@ release. Follow semantic versioning and keep entries short enough to scan.
 
 ### Added
 
+- A complete Windows, macOS, and Linux new-user installation guide covering
+  Python, Obsidian, Zotero, Ollama models, first build, and troubleshooting.
+- `paperroach setup` for safe Obsidian vault discovery, user-wide minimal
+  configuration, and explicit default-model downloads.
 - `paperroach doctor` for config, store, Zotero, and Ollama health checks.
 - Store metadata validation for schema version, embedding model, and embedding
   dimension compatibility.
 - Release checklist and changelog template.
+- Contributor, governance, code-of-conduct, security, citation, CODEOWNERS,
+  issue-form, pull-request, and Dependabot foundations for public development.
+- Isolated wheel-install smoke testing in CI.
+- Optional figure-aware PDF enrichment with Docling-first extraction, an
+  offline PyMuPDF fallback, local vision descriptions, Obsidian figure embeds,
+  and LanceDB figure retrieval.
+- `paperroach enrich-figures` to backfill visual evidence into existing
+  generated paper notes without rerunning full paper analysis.
+- `paperroach integrate-figures` to weave indexed figure evidence directly
+  into relevant study-note sections while preserving existing note content.
 
 ### Changed
 
+- `paperroach doctor` now verifies the configured text, embedding, and
+  optional vision model tags instead of checking server reachability alone.
+- Wheel smoke tests now exercise the installed `paperroach` executable,
+  idempotent `setup`, and the legacy `init` template path.
+- Package metadata now advertises supported Python versions, research-tool
+  classifiers, search keywords, and project URLs.
 - Metadata extraction now preserves explicit `Domain` and `Subdomain` fields
   before classifier or body-text fallback cues are considered.
 - Documented vector store compatibility and future migration expectations.
+- `paperroach init` now loads its configuration template from packaged data, so
+  installed wheels generate the full documented configuration file.
+- Long-running write locks now heartbeat automatically; the Zotero watcher
+  only holds a writer lock while it is actually building a batch.
+- Configuration now rejects invalid pipeline sizes, unsafe vault-relative
+  output paths, and unknown PDF ingesters before work starts.
+- Figure extraction is opt-in and uses a separate vision-model pass so visual,
+  text, and embedding models do not co-reside on an 8 GB GPU.
 
 ### Fixed
 
+- Config discovery now falls through past a mismatched vault-local or
+  current-directory file to a matching user config.
 - Automatically discovered `kb.toml` files for a different vault are ignored
   when `--vault` or `KB_VAULT` selects another vault, preventing accidental
   reuse of another vault's absolute store path or model settings.
@@ -27,6 +57,10 @@ release. Follow semantic versioning and keep entries short enough to scan.
   store does not exist yet.
 - `paperroach stats` now validates existing store metadata compatibility
   without creating or rewriting store files.
+- Generated and managed Markdown updates now use atomic replacement writes.
+- `gc --apply` now deletes only generated PDF duplicates whose current source
+  bytes match exactly; same-title/year papers remain review-only candidates.
+- Content-hash ledger updates now retire stale hashes when a source file changes.
 
 ### Migration Notes
 

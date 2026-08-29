@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from kb.chunk import chunk_markdown
+from kb.chunk import _window, chunk_markdown
 from kb.config import Config
 
 
@@ -12,6 +12,10 @@ class ChunkMarkdownTests(unittest.TestCase):
             chunk_size=chunk_size,
             chunk_overlap=overlap,
         )
+
+    def test_window_rejects_non_positive_size(self):
+        with self.assertRaises(ValueError):
+            _window("text", 0, 0)
 
     def test_headers_inside_balanced_code_fences_are_not_sections(self):
         markdown = "\n".join(

@@ -81,6 +81,8 @@ def _split_sections_pass(
 
 
 def _window(text: str, size: int, overlap: int) -> list[str]:
+    if size < 1:
+        raise ValueError(f"chunk size must be at least 1 (got {size})")
     text = text.strip()
     if not text:
         return []

@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <pattern id="grid" width="74" height="74" patternUnits="userSpaceOnUse">
+      <path d="M74 0H0v74" fill="none" stroke="#12191c" stroke-opacity=".055"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="150%" height="160%">
+      <feDropShadow dx="10" dy="13" stdDeviation="13" flood-color="#12191c" flood-opacity=".13"/>
+    </filter>
+    <linearGradient id="rail" x1="0" x2="1">
+      <stop offset="0" stop-color="#b9473e"/>
+      <stop offset=".5" stop-color="#068d7c"/>
+      <stop offset="1" stop-color="#7257c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#eef3f1"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <g transform="translate(64 47)" fill="none" stroke="#12191c" stroke-linecap="square" stroke-width="2.4">
+    <path d="M0 0h20l8 8v28H0z"/>
+    <path d="M20 0v9h8M7 18h14M7 24h11M-3 10l-7-7M31 10l7-7"/>
+  </g>
+  <text x="110" y="75" fill="#12191c" font-family="Aptos, Segoe UI, sans-serif" font-size="25" font-weight="800">PaperRoach</text>
+  <rect x="257" y="54" width="54" height="22" fill="none" stroke="#879994"/>
+  <text x="268" y="69" fill="#536269" font-family="Consolas, monospace" font-size="9" font-weight="700" letter-spacing="1">ALPHA</text>
+
+  <g transform="translate(64 176)">
+    <circle cx="5" cy="-28" r="5" fill="#068d7c"/>
+    <text x="21" y="-23" fill="#12191c" font-family="Consolas, monospace" font-size="13" font-weight="700" letter-spacing="2">LOCAL-FIRST PAPER KNOWLEDGE</text>
+    <text x="0" y="57" fill="#12191c" font-family="Aptos Display, Segoe UI, sans-serif" font-size="75" font-weight="800" letter-spacing="-4">Read it once.</text>
+    <text x="0" y="137" fill="#12191c" font-family="Aptos Display, Segoe UI, sans-serif" font-size="75" font-weight="800" letter-spacing="-4">Keep it useful.</text>
+    <text x="2" y="188" fill="#536269" font-family="Aptos, Segoe UI, sans-serif" font-size="23">Zotero PDFs → linked Obsidian notes → local search</text>
+  </g>
+
+  <g transform="translate(733 131)" filter="url(#shadow)">
+    <rect x="0" y="0" width="400" height="341" fill="#f8fbfa" stroke="#12191c"/>
+    <rect x="0" y="0" width="400" height="40" fill="#f8fbfa" stroke="#12191c"/>
+    <text x="17" y="25" fill="#12191c" font-family="Consolas, monospace" font-size="10" font-weight="700" letter-spacing="1.3">ONE PAPER / ON YOUR MACHINE</text>
+
+    <g transform="translate(25 84)">
+      <rect width="92" height="122" fill="#fff" stroke="#12191c"/>
+      <rect width="92" height="26" fill="#b9473e"/>
+      <text x="9" y="17" fill="#fff" font-family="Consolas, monospace" font-size="9" font-weight="700">ZOTERO</text>
+      <text x="31" y="70" fill="#b9473e" font-family="Consolas, monospace" font-size="12" font-weight="700">PDF</text>
+      <path d="M23 84h46M23 94h37" stroke="#b9473e"/>
+    </g>
+
+    <path d="M117 145h49" stroke="url(#rail)" stroke-width="3"/>
+    <path d="m166 145-9-6v12z" fill="#068d7c"/>
+
+    <g transform="translate(166 106)">
+      <rect width="70" height="78" fill="#c7eee6" stroke="#068d7c"/>
+      <circle cx="35" cy="29" r="8" fill="none" stroke="#068d7c" stroke-width="2"/>
+      <path d="M23 48h24M27 56h16" stroke="#068d7c"/>
+      <text x="18" y="69" fill="#045e54" font-family="Consolas, monospace" font-size="8" font-weight="700">LOCAL AI</text>
+    </g>
+
+    <path d="M236 145h39" stroke="url(#rail)" stroke-width="3"/>
+    <path d="m275 145-9-6v12z" fill="#7257c7"/>
+
+    <g transform="translate(275 69)">
+      <rect width="99" height="151" fill="#fff" stroke="#12191c"/>
+      <rect width="99" height="26" fill="#7257c7"/>
+      <text x="9" y="17" fill="#fff" font-family="Consolas, monospace" font-size="9" font-weight="700">OBSIDIAN</text>
+      <text x="10" y="50" fill="#12191c" font-family="Consolas, monospace" font-size="7" font-weight="700"># Paper note</text>
+      <text x="10" y="70" fill="#7257c7" font-family="Consolas, monospace" font-size="6">## TL;DR</text>
+      <path d="M10 79h78M10 87h61M10 95h70" stroke="#879994"/>
+      <text x="10" y="116" fill="#7257c7" font-family="Consolas, monospace" font-size="6">## Concepts</text>
+      <path d="M10 125h57M10 133h72" stroke="#7257c7"/>
+    </g>
+
+    <g transform="translate(25 267)">
+      <circle cx="7" cy="7" r="7" fill="#068d7c"/>
+      <path d="m4 7 2 2 4-5" fill="none" stroke="#fff" stroke-width="1.5"/>
+      <text x="24" y="11" fill="#12191c" font-family="Consolas, monospace" font-size="10" font-weight="700">NO TELEMETRY · ZOTERO READ-ONLY · MIT</text>
+    </g>
+  </g>
+
+  <path d="M64 557h1069" stroke="#899a95"/>
+  <text x="64" y="592" fill="#068d7c" font-family="Consolas, monospace" font-size="13" font-weight="700">github.com/jay0n9/paperroach</text>
+  <text x="1133" y="592" fill="#536269" font-family="Consolas, monospace" font-size="12" text-anchor="end">PYTHON 3.11–3.12 · OLLAMA · LANCEDB</text>
+</svg>

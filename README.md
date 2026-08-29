@@ -2,6 +2,10 @@
 
 [![CI](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml/badge.svg)](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml)
 
+[Website](https://jay0n9.github.io/paperroach/) ·
+[Installation guide](INSTALL.md) ·
+[Issues](https://github.com/jay0n9/paperroach/issues)
+
 PaperRoach is a local-first paper knowledge pipeline for researchers who keep
 papers in Zotero and notes in Obsidian. It turns PDFs and Markdown notes into a
 linked Obsidian knowledge library, backed by LanceDB vector search and local
@@ -46,49 +50,59 @@ Obsidian notes, concept notes, tags, related-paper links
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11 or 3.12 (Python 3.12 via
+  [uv-managed Python](https://docs.astral.sh/uv/guides/install-python/) is
+  recommended)
+- An existing Obsidian vault
 - Ollama running locally at `http://localhost:11434`
+- Zotero is optional for manual PDF builds and recommended for automatic
+  metadata and attachment watching
 - Recommended models:
 
 ```bash
 ollama pull qwen3:8b
 ollama pull bge-m3
+# Optional, for figure_mode = "describe"
+ollama pull qwen2.5vl:7b
 ```
 
 ## Install
 
-```bash
-pip install -e .
-```
+The [new-user installation guide](INSTALL.md) covers Windows, macOS, Linux,
+Obsidian and Zotero detection, Ollama model downloads, the first PDF, and
+troubleshooting. The short source-install path is:
 
-Or install runtime dependencies without installing the package:
-
-```bash
-pip install -r requirements.txt
+```text
+git clone https://github.com/jay0n9/paperroach.git
+cd paperroach
+uv python install 3.12
+uv venv --python 3.12 .venv
+uv pip install --python .venv .
 ```
 
 The primary CLI is `paperroach`. The older `kb` command remains as a
-compatibility alias.
+compatibility alias. Activate `.venv` before using it: run
+`.\.venv\Scripts\Activate.ps1` on Windows or
+`source .venv/bin/activate` on macOS/Linux.
 
-For manual commands and development checks, use Python 3.11 or 3.12 in a
-dedicated virtual environment, then install the project with `pip install -e .`.
-This is the same supported Python range exercised by CI on Windows and Linux.
-Optional PDF backends such as OCR, Docling, and Nougat should be installed only
-in that environment.
+## First-time setup
 
-## Configure
-
-```bash
-paperroach init --vault "C:/Users/you/Documents/MyVault"
+```text
+paperroach setup --pull-models
+paperroach doctor
 ```
 
-This creates `References/` and `.kb/` in your vault and writes `kb.toml` in the
-current directory. See `kb.example.toml` for all options.
+Setup detects Obsidian vaults that have been opened, writes a small user-level
+config, prepares `References/` and `.kb/`, reports Zotero when available, and
+downloads the configured Ollama models only when `--pull-models` is passed. It
+is safe to rerun. Pass `--vault PATH` when detection finds none or more than one.
+See `kb/templates/kb.example.toml` for every optional setting.
 
 Configuration precedence:
 
 ```text
-CLI flags > KB_* environment variables > kb.toml > built-in defaults
+CLI flags > KB_* environment variables > selected config > built-in defaults
+KB_CONFIG > <explicit vault>/kb.toml > ./kb.toml > user config
 ```
 
 If `KB_CONFIG` is set, it must point to an existing TOML file. Invalid TOML,
@@ -112,15 +126,17 @@ paperroach build paper1.pdf paper2.pdf "C:/notes"
 For each input, PaperRoach:
 
 1. Extracts Markdown from the source.
-2. Extracts metadata and paper analysis with the LLM.
-3. Classifies the paper by contribution domain.
-4. Distills concepts and drafts concept-note content.
-5. Chunks the document.
-6. Unloads the LLM and loads the embedding model.
-7. Embeds chunks and summary text.
-8. Finds related papers from the existing store and writes paper/source notes.
-9. Commits successfully written documents to LanceDB and creates concept notes.
-10. Saves the content-hash ledger and refreshes related-paper links.
+2. Optionally extracts figures into vault-visible assets and describes them with
+   a local vision model.
+3. Extracts metadata and paper analysis with the LLM.
+4. Classifies the paper by contribution domain.
+5. Distills concepts and drafts concept-note content.
+6. Chunks the document.
+7. Unloads the LLM and loads the embedding model.
+8. Embeds prose chunks, summaries, and figure evidence.
+9. Finds related papers from the existing store and writes paper/source notes.
+10. Commits successfully written documents to LanceDB and creates concept notes.
+11. Saves the content-hash ledger and refreshes related-paper links.
 
 PDFs become generated paper notes under:
 
@@ -282,7 +298,7 @@ is provided.
 ## Development Checks
 
 Pull requests run the same checks on GitHub Actions for Python 3.11 and 3.12
-on Linux and Windows.
+on Linux, macOS, and Windows.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -299,6 +315,15 @@ Release and versioning steps are documented in `RELEASE.md`.
 The vector store writes `.kb/store_meta.json` with the store schema version,
 embedding model, and embedding dimension. If you change `embed_model` or
 `embed_dim`, rebuild the store instead of reusing incompatible vectors.
+
+## Community
+
+PaperRoach is an early public project and welcomes focused contributions. Read
+`CONTRIBUTING.md` for local setup, test expectations, and data-safety rules.
+Community standards are in `CODE_OF_CONDUCT.md`; responsible disclosure is in
+`SECURITY.md`; maintainer decision-making is described in `GOVERNANCE.md`.
+
+If you use PaperRoach in research, see `CITATION.cff`.
 
 ## PDF Parsing
 
@@ -322,13 +347,87 @@ Or per command:
 paperroach build "paper.pdf" --ingester nougat
 ```
 
+## Figure-Aware Parsing
+
+Figure enrichment is opt-in. In `extract` mode PaperRoach saves useful figure
+crops and captions; `describe` additionally analyzes each crop with a local
+vision model. Assets live under `Assets/PaperRoach/<doc-id>/`, generated paper
+notes receive a `## Key Figures` section, and visual evidence is searchable
+alongside prose chunks. New paper notes place up to three figure-grounded
+findings and inline previews directly inside the relevant `Approach`, `Key
+Results`, or other study-note section, so the visual evidence appears where the
+reader needs it.
+
+```bash
+pip install -e ".[docling]"
+ollama pull qwen2.5vl:7b
+paperroach build "paper.pdf" --figure-mode describe
+# Fully offline embedded-image extraction:
+paperroach build "paper.pdf" --figure-mode extract --figure-backend pymupdf
+```
+
+To enrich papers that were indexed before figure support existed, use the
+backfill command. It reads each generated note's original `kb-source` PDF,
+preserves the existing analysis and `## My Notes` content, and updates only the
+generated Key Figures section and figure index. Preview first, then apply:
+
+```bash
+paperroach enrich-figures --figure-mode describe --figure-backend pymupdf
+paperroach enrich-figures --figure-mode describe --figure-backend pymupdf --apply
+```
+
+Use `--limit N` to process a smaller batch. Papers with indexed figures are
+skipped by default; add `--force` to refresh them. The default command is a dry
+run; only `--apply` writes assets, notes, and LanceDB figure rows.
+
+For notes that already have indexed figures, weave that evidence into the
+existing study summary without re-ingesting the PDF or rewriting the rest of
+the note:
+
+```bash
+paperroach integrate-figures
+paperroach integrate-figures --apply
+```
+
+This creates or refreshes only managed inline visual-evidence blocks, preserves
+`## My Notes`, and skips notes already integrated unless `--force` is supplied.
+The synthesis uses only indexed figure descriptions and captions; papers whose
+visual assets do not support a grounded claim are left unchanged.
+
+When a PDF exposes a figure as many small image tiles rather than one large
+embedded crop, the PyMuPDF backend can render the compound page visual as a
+fallback. This path runs only when no standalone figure crop qualifies.
+
+```toml
+figure_mode = "describe"       # off | extract | describe
+figure_backend = "docling"     # docling | pymupdf
+vision_model = "qwen2.5vl:7b"
+figure_assets_dir = "Assets/PaperRoach"
+figure_max_per_paper = 12
+figure_min_area_ratio = 0.02
+```
+
+`docling` is the preferred layout-aware backend: it can associate pictures,
+tables, captions, and page geometry. Its first use may need locally cached
+model artifacts. `pymupdf` is a fast offline fallback for PDFs that contain
+embedded raster images; it cannot reliably recover vector-only diagrams or
+complex table structure. Figure descriptions are supporting evidence for paper
+analysis and HCI classification, never a source for bibliographic metadata.
+
+PaperRoach loads the vision model, then unloads it before the text LLM and
+embedder run, so the three models do not co-reside on an 8 GB GPU. Figure crops
+remain in the local vault; do not commit PDFs or extracted assets from
+copyrighted papers to the project repository.
+
 ## Project Layout
 
 ```text
 kb/
   cli.py             command-line interface
+  templates/          packaged `paperroach init` configuration template
   pipeline.py        build, watch, relink, refile, retag, gc
   ingest.py          PDF / Markdown ingestion
+  figures.py         figure crops, vision evidence, and vault assets
   llm.py             LLM prompts and JSON coercion
   taxonomy.py        paper-domain taxonomy and heuristic fallback
   obsidian.py        generated notes and managed blocks
@@ -337,6 +436,8 @@ kb/
   rag.py             search and grounded question answering
 paperroach/
   __main__.py        package alias for `python -m paperroach`
+scripts/
+  smoke_wheel.py      isolated wheel-install smoke test
 ```
 
 ## License

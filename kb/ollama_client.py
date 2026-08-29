@@ -111,6 +111,27 @@ class OllamaClient:
                 f"({exc}). Start it with 'ollama serve' and retry."
             ) from exc
 
+    def installed_models(self) -> set[str]:
+        """Return model tags exposed by the local Ollama server."""
+        url = self.config.ollama_host.rstrip("/") + "/api/tags"
+        try:
+            raw = urllib.request.urlopen(url, timeout=10).read()
+            payload = json.loads(raw.decode("utf-8"))
+        except Exception as exc:
+            raise OllamaError(
+                f"Could not list Ollama models at {self.config.ollama_host} "
+                f"({exc})."
+            ) from exc
+
+        names: set[str] = set()
+        for item in payload.get("models", []):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or item.get("model")
+            if isinstance(name, str) and name:
+                names.add(name)
+        return names
+
     # ── PASS A : LLM ────────────────────────────────────────────────
     def _chat(self, messages, *, fmt=None, temperature: float) -> str:
         cfg = self.config
@@ -194,6 +215,46 @@ class OllamaClient:
             ]
             raw = self._chat(repair, fmt="json", temperature=0.0)
             return _loads_lenient(raw)
+
+    def generate_vision_json(self, system: str, user: str, image_path) -> dict:
+        """Run one image-grounded, JSON-mode vision request.
+
+        The vision model is deliberately separate from ``llm_model``. The
+        pipeline loads it once for every figure batch, then evicts it before
+        the text LLM and embedder run on an 8 GB GPU.
+        """
+        messages = [
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": user,
+                "images": [str(image_path)],
+            },
+        ]
+        kwargs = {
+            "model": self.config.vision_model,
+            "messages": messages,
+            "format": "json",
+            "options": {
+                "num_ctx": self.config.llm_num_ctx,
+                "temperature": 0.0,
+                "seed": self.config.llm_seed,
+            },
+            "keep_alive": self.config.keep_alive,
+        }
+        raw = self._chat_retry(**kwargs)
+        try:
+            return _loads_lenient(raw)
+        except OllamaError:
+            repair = messages + [
+                {"role": "assistant", "content": raw[:4000]},
+                {
+                    "role": "user",
+                    "content": "Return only the complete JSON object requested above.",
+                },
+            ]
+            kwargs["messages"] = repair
+            return _loads_lenient(self._chat_retry(**kwargs))
 
     def generate_text(self, system: str, user: str, *, temperature: float = 0.3) -> str:
         """Free-form generation (used by `ask`)."""
@@ -296,6 +357,9 @@ class OllamaClient:
 
     def unload_embed(self) -> None:
         self.unload(self.config.embed_model)
+
+    def unload_vision(self) -> None:
+        self.unload(self.config.vision_model)
 
 
 def _loads_lenient(raw: str) -> dict:

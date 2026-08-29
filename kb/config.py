@@ -3,7 +3,7 @@
 Precedence (highest first):
     1. explicit CLI overrides (dict passed to ``load_config``)
     2. environment variables (``KB_*``)
-    3. a ``kb.toml`` file (``KB_CONFIG`` env, ./kb.toml, or <vault>/kb.toml)
+    3. a ``kb.toml`` file (``KB_CONFIG``, vault, cwd, then user config)
     4. built-in defaults
 """
 from __future__ import annotations
@@ -23,8 +23,13 @@ _ENV = {
     "ollama_host": "KB_OLLAMA_HOST",
     "llm_model": "KB_LLM_MODEL",
     "embed_model": "KB_EMBED_MODEL",
+    "embed_dim": "KB_EMBED_DIM",
     "keep_alive": "KB_KEEP_ALIVE",
     "ingester": "KB_INGESTER",
+    "figure_mode": "KB_FIGURE_MODE",
+    "figure_backend": "KB_FIGURE_BACKEND",
+    "vision_model": "KB_VISION_MODEL",
+    "figure_assets_dir": "KB_FIGURE_ASSETS_DIR",
     "zotero_dir": "KB_ZOTERO_DIR",
 }
 
@@ -35,6 +40,7 @@ _BOOL_FIELDS = {
     "create_concept_notes",
     "references_by_subject",
     "references_by_subdomain",
+    "figure_include_tables",
 }
 _INT_FIELDS = {
     "llm_num_ctx",
@@ -49,9 +55,33 @@ _INT_FIELDS = {
     "ocr_dpi",
     "nougat_batchsize",
     "watch_interval",
+    "figure_max_per_paper",
 }
+_FLOAT_FIELDS = {"figure_min_area_ratio", "figure_image_scale"}
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _FALSE_VALUES = {"0", "false", "no", "off"}
+_POSITIVE_INT_FIELDS = {
+    "llm_num_ctx",
+    "embed_dim",
+    "meta_input_chars",
+    "analysis_input_chars",
+    "chunk_size",
+    "related_top_k",
+    "rag_top_k",
+    "ocr_dpi",
+    "watch_interval",
+    "figure_max_per_paper",
+}
+_NONNEGATIVE_INT_FIELDS = {"chunk_overlap", "nougat_batchsize"}
+_RELATIVE_DIR_FIELDS = {
+    "references_dir",
+    "knowledge_library_dir",
+    "tags_dir",
+    "figure_assets_dir",
+}
+_INGESTERS = {"pymupdf4llm", "ocr", "nougat", "docling"}
+_FIGURE_MODES = {"off", "extract", "describe"}
+_FIGURE_BACKENDS = {"docling", "pymupdf"}
 
 
 @dataclass
@@ -72,6 +102,7 @@ class Config:
     embed_model: str = "bge-m3"
     embed_dim: int = 1024
     keep_alive: str = "30m"
+    vision_model: str = "qwen2.5vl:7b"
 
     # ── LLM metadata + analysis extraction ───────────────────────────
     meta_input_chars: int = 12000
@@ -100,6 +131,16 @@ class Config:
     # <references_dir>/<Domain>/<Subdomain>/.
     references_by_subdomain: bool = True
 
+    # Optional figure-aware PDF enrichment. It is opt-in because Docling and a
+    # vision model add substantial download and processing costs.
+    figure_mode: str = "off"  # "off" | "extract" | "describe"
+    figure_backend: str = "docling"
+    figure_assets_dir: str = "Assets/PaperRoach"
+    figure_max_per_paper: int = 12
+    figure_min_area_ratio: float = 0.02
+    figure_image_scale: float = 2.0
+    figure_include_tables: bool = False
+
     # ── Zotero integration ───────────────────────────────────────────
     zotero_dir: str = ""          # "" → auto-detect from the Zotero profile
     zotero_enrich: bool = True    # prefer Zotero DB metadata (title/authors/year/tags)
@@ -118,30 +159,72 @@ class Config:
     def knowledge_library_path(self) -> Path:
         return self.vault_path / self.knowledge_library_dir
 
+    @property
+    def figure_assets_path(self) -> Path:
+        return self.vault_path / self.figure_assets_dir
+
     def ensure_dirs(self) -> None:
         self.kb_path.mkdir(parents=True, exist_ok=True)
         self.references_path.mkdir(parents=True, exist_ok=True)
+        if self.figure_mode != "off":
+            self.figure_assets_path.mkdir(parents=True, exist_ok=True)
 
 
 # --------------------------------------------------------------------------- #
 #  Loading helpers
 # --------------------------------------------------------------------------- #
-def _find_config_file(overrides: dict) -> Path | None:
+def user_config_path(
+    *,
+    platform: str | None = None,
+    environ: dict[str, str] | None = None,
+    home: Path | None = None,
+) -> Path:
+    """Return PaperRoach's per-user configuration path for this OS."""
+    platform = platform or sys.platform
+    environ = os.environ if environ is None else environ
+    home = Path.home() if home is None else Path(home)
+
+    if platform == "win32":
+        base = Path(environ.get("APPDATA") or home / "AppData" / "Roaming")
+        return base / "PaperRoach" / "kb.toml"
+    if platform == "darwin":
+        return home / "Library" / "Application Support" / "PaperRoach" / "kb.toml"
+    base = Path(environ.get("XDG_CONFIG_HOME") or home / ".config")
+    return base / "paperroach" / "kb.toml"
+
+
+def _config_candidates(
+    overrides: dict,
+    *,
+    config_path: str | Path | None = None,
+) -> tuple[list[Path], bool]:
+    """Return config candidates in priority order and whether one is forced."""
+    if config_path is not None:
+        explicit = Path(config_path).expanduser()
+        if not explicit.is_file():
+            raise ConfigError(f"Config path points to a missing file: {explicit}")
+        return [explicit], True
+
     candidates: list[Path] = []
     if os.environ.get("KB_CONFIG"):
-        explicit = Path(os.environ["KB_CONFIG"])
+        explicit = Path(os.environ["KB_CONFIG"]).expanduser()
         if not explicit.is_file():
             raise ConfigError(f"KB_CONFIG points to a missing file: {explicit}")
-        return explicit
+        return [explicit], True
     # A vault may carry its own kb.toml; consider it if we know the vault.
     vault = overrides.get("vault_path") or os.environ.get("KB_VAULT")
     if vault:
-        candidates.append(Path(vault) / "kb.toml")
+        candidates.append(Path(vault).expanduser() / "kb.toml")
     candidates.append(Path.cwd() / "kb.toml")
-    for c in candidates:
-        if c.is_file():
-            return c
-    return None
+    candidates.append(user_config_path())
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        identity = _path_identity(candidate)
+        if identity not in seen:
+            seen.add(identity)
+            unique.append(candidate)
+    return unique, False
 
 
 def _path_identity(value) -> str:
@@ -177,10 +260,67 @@ def _coerce(field_name: str, value):
             return int(value)
         except (TypeError, ValueError) as exc:
             raise ConfigError(f"Invalid integer for {field_name}: {value!r}") from exc
+    if field_name in _FLOAT_FIELDS:
+        try:
+            return float(value)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError(f"Invalid number for {field_name}: {value!r}") from exc
     return value
 
 
-def load_config(overrides: dict | None = None) -> Config:
+def _validate_config(cfg: Config) -> None:
+    """Reject values that would hang the pipeline or escape the vault layout."""
+    for field_name in _POSITIVE_INT_FIELDS:
+        value = getattr(cfg, field_name)
+        if value < 1:
+            raise ConfigError(f"{field_name} must be at least 1 (got {value}).")
+    for field_name in _NONNEGATIVE_INT_FIELDS:
+        value = getattr(cfg, field_name)
+        if value < 0:
+            raise ConfigError(f"{field_name} must not be negative (got {value}).")
+    if cfg.chunk_overlap >= cfg.chunk_size:
+        raise ConfigError(
+            "chunk_overlap must be smaller than chunk_size "
+            f"(got {cfg.chunk_overlap} >= {cfg.chunk_size})."
+        )
+    if cfg.ingester not in _INGESTERS:
+        choices = ", ".join(sorted(_INGESTERS))
+        raise ConfigError(f"Unknown ingester {cfg.ingester!r}. Choose one of: {choices}.")
+    if cfg.figure_mode not in _FIGURE_MODES:
+        choices = ", ".join(sorted(_FIGURE_MODES))
+        raise ConfigError(
+            f"Unknown figure_mode {cfg.figure_mode!r}. Choose one of: {choices}."
+        )
+    if cfg.figure_backend not in _FIGURE_BACKENDS:
+        choices = ", ".join(sorted(_FIGURE_BACKENDS))
+        raise ConfigError(
+            f"Unknown figure_backend {cfg.figure_backend!r}. Choose one of: {choices}."
+        )
+    if not 0.0 < cfg.figure_min_area_ratio <= 1.0:
+        raise ConfigError(
+            "figure_min_area_ratio must be greater than 0 and at most 1 "
+            f"(got {cfg.figure_min_area_ratio})."
+        )
+    if cfg.figure_image_scale <= 0:
+        raise ConfigError(
+            f"figure_image_scale must be greater than 0 (got {cfg.figure_image_scale})."
+        )
+    if cfg.figure_mode == "describe" and not cfg.vision_model.strip():
+        raise ConfigError("vision_model must be set when figure_mode is 'describe'.")
+    for field_name in _RELATIVE_DIR_FIELDS:
+        value = str(getattr(cfg, field_name) or "").strip()
+        path = Path(value).expanduser()
+        if path.is_absolute() or path.drive or ".." in path.parts:
+            raise ConfigError(
+                f"{field_name} must be a relative path inside the vault (got {value!r})."
+            )
+
+
+def load_config(
+    overrides: dict | None = None,
+    *,
+    config_path: str | Path | None = None,
+) -> Config:
     """Build a :class:`Config`, merging file / env / CLI overrides.
 
     ``overrides`` keys mirror :class:`Config` field names. ``None`` values are
@@ -192,27 +332,40 @@ def load_config(overrides: dict | None = None) -> Config:
     merged: dict = {}
 
     # 3. file
-    cfg_file = _find_config_file(overrides)
-    if cfg_file is not None:
+    candidates, forced_config = _config_candidates(
+        overrides,
+        config_path=config_path,
+    )
+    cfg_file: Path | None = None
+    data: dict = {}
+    vault_override = overrides.get("vault_path") or os.environ.get("KB_VAULT")
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
         try:
-            with cfg_file.open("rb") as fh:
-                data = tomllib.load(fh)
+            with candidate.open("rb") as fh:
+                candidate_data = tomllib.load(fh)
         except tomllib.TOMLDecodeError as exc:
-            raise ConfigError(f"Invalid TOML in {cfg_file}: {exc}") from exc
-        vault_override = overrides.get("vault_path") or os.environ.get("KB_VAULT")
+            raise ConfigError(f"Invalid TOML in {candidate}: {exc}") from exc
         if (
             vault_override
-            and not os.environ.get("KB_CONFIG")
-            and data.get("vault_path")
-            and not _same_path(data["vault_path"], vault_override)
+            and not forced_config
+            and candidate_data.get("vault_path")
+            and not _same_path(candidate_data["vault_path"], vault_override)
         ):
             print(
                 "paperroach: warning: ignoring "
-                f"{cfg_file} because it configures vault_path={data['vault_path']!r} "
+                f"{candidate} because it configures "
+                f"vault_path={candidate_data['vault_path']!r} "
                 f"but --vault/KB_VAULT selects {str(vault_override)!r}",
                 file=sys.stderr,
             )
-            data = {}
+            continue
+        cfg_file = candidate
+        data = candidate_data
+        break
+
+    if cfg_file is not None:
         for k, v in data.items():
             if k in valid:
                 merged[k] = v
@@ -234,8 +387,8 @@ def load_config(overrides: dict | None = None) -> Config:
 
     if "vault_path" not in merged:
         raise ConfigError(
-            "No vault path configured. Pass --vault, set KB_VAULT, or add "
-            "vault_path to kb.toml (see kb.example.toml)."
+            "No vault path configured. Run 'paperroach setup', pass --vault, "
+            "set KB_VAULT, or add vault_path to kb.toml."
         )
 
     coerced = {k: _coerce(k, v) for k, v in merged.items()}
@@ -243,6 +396,9 @@ def load_config(overrides: dict | None = None) -> Config:
 
     if not cfg.vault_path.exists():
         raise ConfigError(f"Vault path does not exist: {cfg.vault_path}")
+    if not cfg.vault_path.is_dir():
+        raise ConfigError(f"Vault path is not a directory: {cfg.vault_path}")
+    _validate_config(cfg)
     return cfg
 
 

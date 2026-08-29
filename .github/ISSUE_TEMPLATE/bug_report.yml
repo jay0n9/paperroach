@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a reproducible PaperRoach problem.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not attach private PDFs, Zotero databases, vault notes, or tokens."
+  - type: input
+    id: version
+    attributes:
+      label: PaperRoach version
+      placeholder: "paperroach 0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Windows, macOS, Linux, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Use a synthetic or public example.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and safe logs
+    validations:
+      required: true

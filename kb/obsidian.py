@@ -8,13 +8,16 @@ block is inserted / refreshed inside them.
 from __future__ import annotations
 
 import datetime as _dt
+import os
 import re
+import stat
+import tempfile
 from pathlib import Path
 
 import yaml
 
 from kb.config import Config
-from kb.models import Document, PaperAnalysis
+from kb.models import Document, FigureAsset, PaperAnalysis
 
 RELATED_START = "%% kb-related-start %%"
 RELATED_END = "%% kb-related-end %%"
@@ -35,6 +38,59 @@ _RESERVED_NAMES = {
 _INLINE_MATH = re.compile(r"(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)")
 
 _MATH_CHARS = set("\\^_={}")
+_KEY_FIGURES_RE = re.compile(r"(?ms)^## Key Figures\n.*?(?=^## |\Z)")
+_VISUAL_SYNTHESIS_RE = re.compile(r"(?ms)^## Visual Synthesis\n.*?(?=^## |\Z)")
+_INLINE_VISUAL_START = "<!-- paperroach:visual-evidence:start -->"
+_INLINE_VISUAL_END = "<!-- paperroach:visual-evidence:end -->"
+_INLINE_VISUAL_BLOCK_RE = re.compile(
+    rf"(?ms)^{re.escape(_INLINE_VISUAL_START)}\r?\n.*?^{re.escape(_INLINE_VISUAL_END)}\r?\n?"
+)
+_VISUAL_SECTION_HEADINGS = {
+    "problem_motivation": "Problem & Motivation",
+    "approach": "Approach",
+    "key_results": "Key Results",
+    "takeaways": "Takeaways",
+}
+_VISUAL_SECTION_ORDER = tuple(_VISUAL_SECTION_HEADINGS)
+_SUMMARY_BOUNDARY_RE = re.compile(
+    r"(?m)^## (?:Visual Synthesis|Key Figures|Key Equations|Concepts|Concept Map|"
+    r"Related Papers|My Notes)\b|^# References\b"
+)
+
+
+def write_text_atomic(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Replace a text file without exposing a partially-written version.
+
+    Generated notes carry user-authored sections, and source notes may be
+    updated in place. Writing a sibling temporary file before ``os.replace``
+    keeps the previous version intact if a write or process fails midway.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        previous_mode = stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        previous_mode = None
+
+    tmp_path: Path | None = None
+    try:
+        fd, raw_tmp = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+        )
+        tmp_path = Path(raw_tmp)
+        with os.fdopen(fd, "w", encoding=encoding, newline="") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if previous_mode is not None:
+            os.chmod(tmp_path, previous_mode)
+        os.replace(tmp_path, path)
+    except Exception:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def fix_inline_math(text: str) -> str:
@@ -105,7 +161,7 @@ def assign_note_location(doc: Document, config: Config) -> None:
         doc.link_target = doc.source_path.stem
         return
     name = sanitize_filename(doc.metadata.title, doc.metadata.year)
-    name = _dedupe_against(name, config.references_path, doc.source_path)
+    name = _dedupe_against(name, config.vault_path, doc.source_path)
     doc.link_target = name
     subject = ""
     subdomain = ""
@@ -153,7 +209,7 @@ def reference_subject_folder(config: Config, subject: str) -> Path:
     return config.references_path / safe
 
 
-def _dedupe_against(name: str, refs_root: Path, source_path: Path) -> str:
+def _dedupe_against(name: str, vault_root: Path, source_path: Path) -> str:
     """Avoid colliding with an *unrelated* existing note of the same title.
 
     The scan is recursive: wikilinks resolve by basename across the whole
@@ -161,9 +217,9 @@ def _dedupe_against(name: str, refs_root: Path, source_path: Path) -> str:
     """
 
     def taken(candidate: str) -> bool:
-        if not refs_root.exists():
+        if not vault_root.exists():
             return False
-        for existing in refs_root.rglob(f"{candidate}.md"):
+        for existing in vault_root.rglob(f"{candidate}.md"):
             if not _is_our_note_for(existing, source_path):
                 return True
         return False
@@ -253,14 +309,37 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
     out.append(f"> - **Link:** {source}")
     out.append("")
 
+    visual_blocks = _render_inline_visual_blocks(an.visual_synthesis, doc.figures)
+    if not visual_blocks:
+        visual_blocks = _existing_inline_visual_blocks(doc.note_path)
+    if not visual_blocks:
+        legacy_block = _legacy_visual_synthesis_block(doc.note_path)
+        if legacy_block:
+            visual_blocks = {"key_results": legacy_block}
+
     if an.tl_dr:
         out += ["## TL;DR", "", an.tl_dr, ""]
     if an.problem_motivation:
         out += ["## Problem & Motivation", "", an.problem_motivation, ""]
+    problem_visual = visual_blocks.pop("problem_motivation", "")
+    if problem_visual:
+        if not an.problem_motivation:
+            out += ["## Problem & Motivation", ""]
+        out += [problem_visual, ""]
     if an.approach:
         out += ["## Approach", "", an.approach, ""]
+    approach_visual = visual_blocks.pop("approach", "")
+    if approach_visual:
+        if not an.approach:
+            out += ["## Approach", ""]
+        out += [approach_visual, ""]
     if an.key_results:
         out += ["## Key Results", "", an.key_results, ""]
+    results_visual = visual_blocks.pop("key_results", "")
+    if results_visual:
+        if not an.key_results:
+            out += ["## Key Results", ""]
+        out += [results_visual, ""]
     if an.contributions:
         out += ["## Contributions", ""] + [f"- {c}" for c in an.contributions] + [""]
     if an.strengths or an.limitations:
@@ -274,12 +353,25 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
         out.append("")
     if an.takeaways:
         out += ["## Takeaways", "", an.takeaways, ""]
+    takeaways_visual = visual_blocks.pop("takeaways", "")
+    if takeaways_visual:
+        if not an.takeaways:
+            out += ["## Takeaways", ""]
+        out += [takeaways_visual, ""]
+    for block in visual_blocks.values():
+        out += [block, ""]
     if doc.equations and not doc.equations_integrated:
         # Only dump a separate section if the equations weren't woven into the
         # Approach prose above.
         out += ["## Key Equations", "", "_Extracted verbatim from the source._", ""]
         for eq in doc.equations:
             out += [f"$$\n{eq}\n$$", ""]
+    if doc.figures:
+        out += _render_figures(doc.figures)
+    elif not doc.figures_synced:
+        existing_figures = _existing_key_figures(doc.note_path)
+        if existing_figures:
+            out += [existing_figures, ""]
     if an.concepts:
         out += ["## Concepts", ""]
         out += [f"- {wikilink(c['name'])}" for c in an.concepts if c.get("name")]
@@ -299,6 +391,179 @@ def render_note(doc: Document, related_links: list[str], config: Config) -> str:
         out.append(f"- {meta.source_url}")
 
     return fix_inline_math("\n".join(out).rstrip() + "\n")
+
+
+def _visual_section_key(value: object) -> str:
+    """Normalize an LLM section label to one of the note's real sections."""
+    normalized = re.sub(r"[\s-]+", "_", str(value or "").strip().lower())
+    aliases = {
+        "problem": "problem_motivation",
+        "motivation": "problem_motivation",
+        "problem_and_motivation": "problem_motivation",
+        "method": "approach",
+        "methods": "approach",
+        "result": "key_results",
+        "results": "key_results",
+        "key_result": "key_results",
+        "takeaway": "takeaways",
+    }
+    normalized = aliases.get(normalized, normalized)
+    return normalized if normalized in _VISUAL_SECTION_HEADINGS else "key_results"
+
+
+def _render_inline_visual_blocks(
+    synthesis: list[dict], figures: list[FigureAsset]
+) -> dict[str, str]:
+    """Group visual evidence into the paper sections where it explains most."""
+    by_index = {figure.index: figure for figure in figures}
+    grouped: dict[str, list[tuple[FigureAsset, str, str]]] = {}
+    seen_indices: set[int] = set()
+    for item in synthesis:
+        if not isinstance(item, dict):
+            continue
+        try:
+            figure_index = int(item.get("figure_index"))
+        except (TypeError, ValueError):
+            continue
+        figure = by_index.get(figure_index)
+        finding = _figure_text(item.get("finding"))
+        connection = _figure_text(item.get("connection"))
+        if figure is None or figure_index in seen_indices or not finding or not connection:
+            continue
+        section = _visual_section_key(item.get("section"))
+        grouped.setdefault(section, []).append((figure, finding, connection))
+        seen_indices.add(figure_index)
+        if len(seen_indices) >= 3:
+            break
+    return {
+        section: _render_inline_visual_block(items)
+        for section, items in grouped.items()
+        if items
+    }
+
+
+def _render_inline_visual_block(items: list[tuple[FigureAsset, str, str]]) -> str:
+    """Render an inline block that is safely replaceable on later refreshes."""
+    out = [_INLINE_VISUAL_START, "### Visual Evidence", ""]
+    for figure, finding, connection in items:
+        label = "Figure" if figure.source_kind == "figure" else "Table"
+        page = f" (p. {figure.page})" if figure.page else ""
+        out += [f"#### {label} {figure.index}{page}", ""]
+        if figure.asset_relpath:
+            out += [f"![[{figure.asset_relpath}|560]]", ""]
+        out += [
+            f"**What it shows:** {finding}",
+            "",
+            f"**Why it matters here:** {connection}",
+            "",
+        ]
+    out.append(_INLINE_VISUAL_END)
+    return "\n".join(out)
+
+
+def _note_section_match(text: str, heading: str) -> re.Match | None:
+    pattern = re.compile(
+        rf"(?ms)^## {re.escape(heading)}\b[^\n]*\n.*?(?=^## |\Z)"
+    )
+    return pattern.search(text)
+
+
+def _existing_inline_visual_blocks(note_path: Path | None) -> dict[str, str]:
+    """Read previously managed inline evidence so a rebuild never drops it."""
+    if note_path is None or not note_path.exists():
+        return {}
+    text = _read_text_tolerant(note_path)
+    blocks: dict[str, str] = {}
+    for section, heading in _VISUAL_SECTION_HEADINGS.items():
+        match = _note_section_match(text, heading)
+        if match is None:
+            continue
+        inline = _INLINE_VISUAL_BLOCK_RE.search(match.group(0))
+        if inline:
+            blocks[section] = inline.group(0).strip()
+    return blocks
+
+
+def _legacy_visual_synthesis_block(note_path: Path | None) -> str:
+    """Keep pre-inline visual synthesis visible until it is explicitly migrated."""
+    legacy = _existing_visual_synthesis(note_path)
+    if not legacy:
+        return ""
+    body = re.sub(r"(?m)^## Visual Synthesis[^\n]*\n?", "", legacy).strip()
+    body = re.sub(r"(?m)^### ", "#### ", body)
+    if not body:
+        return ""
+    return "\n".join(
+        [_INLINE_VISUAL_START, "### Visual Evidence", "", body, "", _INLINE_VISUAL_END]
+    )
+
+
+def _render_figures(figures: list[FigureAsset]) -> list[str]:
+    """Render visual evidence without duplicating the original paper assets."""
+    out = ["## Key Figures", ""]
+    for figure in figures:
+        label = "Figure" if figure.source_kind == "figure" else "Table"
+        suffix = f" - {_figure_text(figure.figure_type)}" if figure.figure_type else ""
+        page = f" (p. {figure.page})" if figure.page else ""
+        out += [f"### {label} {figure.index}{suffix}{page}", ""]
+        if figure.asset_relpath:
+            out += [f"![[{figure.asset_relpath}|720]]", ""]
+        if figure.caption:
+            out += ["> [!quote] Original caption", f"> {_figure_text(figure.caption)}", ""]
+        if figure.observed_facts:
+            out += [f"**What it shows:** {_join_clauses(figure.observed_facts)}", ""]
+        if figure.interpretation:
+            out += [f"**Research relevance:** {_figure_text(figure.interpretation)}", ""]
+        if figure.research_evidence:
+            out += [f"**Evidence:** {_join_clauses(figure.research_evidence)}", ""]
+        if figure.hci_signals:
+            out += [f"**HCI signals:** {_join_clauses(figure.hci_signals)}", ""]
+        if figure.uncertainties:
+            out += [f"**Uncertainty:** {_join_clauses(figure.uncertainties)}", ""]
+        out += [f"^{figure.block_id}", ""]
+    return out
+
+
+def _figure_text(value: object) -> str:
+    """Keep model/caption fields inside their intended Markdown paragraph."""
+    return " ".join(str(value or "").split())
+
+
+def _existing_key_figures(note_path: Path | None) -> str:
+    """Preserve prior visual evidence when extraction is disabled or failed."""
+    if note_path is None or not note_path.exists():
+        return ""
+    text = _read_text_tolerant(note_path)
+    match = _KEY_FIGURES_RE.search(text)
+    return match.group(0).rstrip() if match else ""
+
+
+def _existing_visual_synthesis(note_path: Path | None) -> str:
+    """Return the managed visual-synthesis section from an existing note."""
+    if note_path is None or not note_path.exists():
+        return ""
+    match = _VISUAL_SYNTHESIS_RE.search(_read_text_tolerant(note_path))
+    return match.group(0).rstrip() if match else ""
+
+
+def has_visual_synthesis(path: Path) -> bool:
+    """True when a note already uses the current inline visual-evidence format."""
+    if not path.exists():
+        return False
+    text = _read_text_tolerant(path)
+    return _INLINE_VISUAL_BLOCK_RE.search(text) is not None
+
+
+def generated_summary_context(path: Path) -> str:
+    """Return generated study prose while excluding personal and visual sections."""
+    if not path.exists():
+        return ""
+    _frontmatter, body = split_frontmatter(_read_text_tolerant(path))
+    body = _INLINE_VISUAL_BLOCK_RE.sub("", body)
+    boundary = _SUMMARY_BOUNDARY_RE.search(body)
+    if boundary:
+        body = body[: boundary.start()]
+    return body.strip()
 
 
 def _join_clauses(items: list[str]) -> str:
@@ -414,7 +679,7 @@ def inject_my_notes(path: Path, content: str) -> bool:
     if not m or m.group(1).strip():
         return False
     updated = text[: m.start(1)] + content.rstrip() + "\n\n" + text[m.end(1):]
-    path.write_text(updated, encoding="utf-8")
+    write_text_atomic(path, updated)
     return True
 
 
@@ -429,8 +694,7 @@ def _related_block(related_links: list[str]) -> str:
 def write_generated_note(doc: Document, related_links: list[str], config: Config) -> Path:
     assert doc.note_path is not None
     content = render_note(doc, related_links, config)
-    doc.note_path.parent.mkdir(parents=True, exist_ok=True)
-    doc.note_path.write_text(content, encoding="utf-8")
+    write_text_atomic(doc.note_path, content)
     return doc.note_path
 
 
@@ -476,9 +740,110 @@ def update_related_in_file(path: Path, related_links: list[str]) -> bool:
         updated = f"{original}{sep}\n{RELATED_HEADING}\n\n{block}\n"
 
     if updated != original:
-        path.write_text(updated, encoding="utf-8")
+        write_text_atomic(path, updated)
         return True
     return False
+
+
+def update_figures_in_file(path: Path, figures: list[FigureAsset]) -> bool:
+    """Insert or replace the generated figure section without rewriting a note.
+
+    The historical backfill path must preserve user writing and existing paper
+    analysis. Only the generated ``## Key Figures`` section is managed here.
+    """
+    if not path.exists() or not figures:
+        return False
+    original = _read_text_tolerant(path)
+    section = "\n".join(_render_figures(figures)).strip()
+    match = _KEY_FIGURES_RE.search(original)
+    if match:
+        updated = (
+            original[:match.start()]
+            + section
+            + "\n\n"
+            + original[match.end():].lstrip()
+        )
+    else:
+        # Keep figures near generated analysis, before concepts, related work,
+        # personal notes, or references when any of those sections exists.
+        boundary = re.search(
+            r"(?m)^## (?:Concepts|Related Papers|My Notes)\b|^# References\b",
+            original,
+        )
+        if boundary:
+            prefix = original[:boundary.start()].rstrip()
+            suffix = original[boundary.start():]
+            updated = f"{prefix}\n\n{section}\n\n{suffix}"
+        else:
+            updated = original.rstrip() + f"\n\n{section}\n"
+    if updated != original:
+        write_text_atomic(path, updated)
+        return True
+    return False
+
+
+def update_visual_synthesis_in_file(
+    path: Path, synthesis: list[dict], figures: list[FigureAsset]
+) -> bool:
+    """Place managed figure evidence directly inside the relevant note sections."""
+    if not path.exists() or not synthesis or not figures:
+        return False
+    blocks = _render_inline_visual_blocks(synthesis, figures)
+    if not blocks:
+        return False
+    original = _read_text_tolerant(path)
+    # Remove only our prior managed material. Everything else, including user
+    # notes and generated prose, remains byte-for-byte in place.
+    updated = _VISUAL_SYNTHESIS_RE.sub("", original)
+    updated = _INLINE_VISUAL_BLOCK_RE.sub("", updated)
+    pending: list[str] = []
+    for section in _VISUAL_SECTION_ORDER:
+        block = blocks.get(section)
+        if not block:
+            continue
+        updated, inserted = _append_inline_visual_block(updated, section, block)
+        if not inserted:
+            pending.append(block)
+
+    if pending:
+        fallback = next(
+            (
+                section
+                for section in ("key_results", "approach", "problem_motivation", "takeaways")
+                if _note_section_match(updated, _VISUAL_SECTION_HEADINGS[section])
+            ),
+            None,
+        )
+        combined = "\n\n".join(pending)
+        if fallback:
+            updated, _inserted = _append_inline_visual_block(updated, fallback, combined)
+        else:
+            boundary = _KEY_FIGURES_RE.search(updated) or re.search(
+                r"(?m)^## (?:Concepts|Related Papers|My Notes)\b|^# References\b",
+                updated,
+            )
+            fallback_section = f"## Key Results\n\n{combined}"
+            if boundary:
+                prefix = updated[:boundary.start()].rstrip()
+                suffix = updated[boundary.start():]
+                updated = f"{prefix}\n\n{fallback_section}\n\n{suffix}"
+            else:
+                updated = updated.rstrip() + f"\n\n{fallback_section}\n"
+    if updated != original:
+        write_text_atomic(path, updated)
+        return True
+    return False
+
+
+def _append_inline_visual_block(text: str, section: str, block: str) -> tuple[str, bool]:
+    """Append one managed visual block to a generated top-level section."""
+    heading = _VISUAL_SECTION_HEADINGS[section]
+    match = _note_section_match(text, heading)
+    if match is None:
+        return text, False
+    current = match.group(0).rstrip()
+    updated = text[:match.start()] + current + f"\n\n{block}\n\n" + text[match.end():].lstrip()
+    return updated, True
 
 
 # --------------------------------------------------------------------------- #

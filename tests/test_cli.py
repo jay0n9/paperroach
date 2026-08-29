@@ -29,6 +29,50 @@ class CLITests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 0)
         self.assertEqual(stdout.getvalue().strip(), f"paperroach {__version__}")
 
+    def test_embed_dim_cli_override(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = Path.cwd()
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            try:
+                os.chdir(root)
+                args = build_parser().parse_args(
+                    ["stats", "--vault", str(vault), "--embed-dim", "3"]
+                )
+                config = cli._config_from_args(args)
+            finally:
+                os.chdir(cwd)
+
+            self.assertEqual(config.embed_dim, 3)
+
+    def test_figure_cli_overrides(self):
+        with tempfile.TemporaryDirectory() as td:
+            cwd = Path.cwd()
+            root = Path(td)
+            vault = root / "vault"
+            vault.mkdir()
+            try:
+                os.chdir(root)
+                args = build_parser().parse_args(
+                    [
+                        "build",
+                        "paper.pdf",
+                        "--vault",
+                        str(vault),
+                        "--figure-mode",
+                        "describe",
+                        "--vision-model",
+                        "qwen2.5vl:7b",
+                    ]
+                )
+                config = cli._config_from_args(args)
+            finally:
+                os.chdir(cwd)
+
+            self.assertEqual(config.figure_mode, "describe")
+            self.assertEqual(config.vision_model, "qwen2.5vl:7b")
+
     def test_pyproject_version_matches_runtime_version(self):
         pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
         data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
@@ -49,7 +93,12 @@ class CLITests(unittest.TestCase):
                 os.chdir(cwd)
 
             self.assertEqual(code, 0)
-            self.assertTrue((root / "kb.toml").exists())
+            config_path = root / "kb.toml"
+            self.assertTrue(config_path.exists())
+            config_data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(config_data["embed_dim"], 1024)
+            self.assertEqual(config_data["ingester"], "pymupdf4llm")
+            self.assertEqual(config_data["figure_mode"], "off")
             self.assertTrue((vault / "References").exists())
             self.assertIn("Wrote", stdout.getvalue())
 
@@ -114,6 +163,48 @@ class CLITests(unittest.TestCase):
                             code = main(["build", "paper.pdf"])
 
                 self.assertEqual(code, 0)
+
+    def test_enrich_figures_forwards_apply_and_limit(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = self._temp_config(Path(td))
+            with patch.object(cli, "_config_from_args", return_value=config):
+                with patch(
+                    "kb.pipeline.enrich_figures",
+                    return_value={"eligible": 2, "updated": 2, "blocked": 0},
+                ) as enrich:
+                    code = main(
+                        [
+                            "enrich-figures",
+                            "--apply",
+                            "--limit",
+                            "2",
+                            "--figure-mode",
+                            "extract",
+                        ]
+                    )
+
+            self.assertEqual(code, 0)
+            enrich.assert_called_once_with(config, apply=True, limit=2, force=False)
+
+    def test_integrate_figures_forwards_apply_and_limit(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = self._temp_config(Path(td))
+            with patch.object(cli, "_config_from_args", return_value=config):
+                with patch(
+                    "kb.pipeline.integrate_figures",
+                    return_value={"eligible": 2, "updated": 2, "blocked": 0},
+                ) as integrate:
+                    code = main(
+                        [
+                            "integrate-figures",
+                            "--apply",
+                            "--limit",
+                            "2",
+                        ]
+                    )
+
+            self.assertEqual(code, 0)
+            integrate.assert_called_once_with(config, apply=True, limit=2, force=False)
 
     def test_build_command_returns_locked_when_pipeline_lock_is_fresh(self):
         with tempfile.TemporaryDirectory() as td:

@@ -67,6 +67,7 @@ class RefilePlanTests(unittest.TestCase):
             self.assertEqual(result["moved"], 0)
             self.assertEqual(result["planned"], 1)
             self.assertTrue(note.exists())
+            self.assertFalse(cfg.kb_path.exists())
             text = plan.read_text(encoding="utf-8")
             self.assertIn("Computer Science/Computer Graphics/Test Paper (2024).md", text)
             self.assertIn("| move |", text)

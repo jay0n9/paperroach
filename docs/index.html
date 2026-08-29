@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en" data-language="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef3f1">
+  <meta name="description" content="PaperRoach turns Zotero PDFs into linked, searchable Obsidian research notes with local Ollama models. No telemetry. MIT licensed.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="PaperRoach — Keep what you read">
+  <meta property="og:description" content="A local-first paper knowledge pipeline for Zotero, Obsidian, and Ollama.">
+  <meta property="og:url" content="https://jay0n9.github.io/paperroach/">
+  <meta property="og:image" content="https://jay0n9.github.io/paperroach/assets/social-card.png">
+  <meta property="og:image:alt" content="PaperRoach connects a Zotero PDF to local AI and an editable Obsidian note.">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ko_KR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="PaperRoach — Keep what you read">
+  <meta name="twitter:description" content="Turn Zotero PDFs into linked, searchable Obsidian notes — on your machine.">
+  <meta name="twitter:image" content="https://jay0n9.github.io/paperroach/assets/social-card.png">
+  <meta name="twitter:image:alt" content="PaperRoach connects a Zotero PDF to local AI and an editable Obsidian note.">
+  <link rel="canonical" href="https://jay0n9.github.io/paperroach/">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "PaperRoach",
+      "description": "Local-first paper knowledge pipeline for Obsidian, Zotero, Ollama, and LanceDB.",
+      "applicationCategory": "ScienceApplication",
+      "operatingSystem": "Windows, macOS, Linux",
+      "softwareVersion": "0.1.0",
+      "license": "https://opensource.org/license/mit",
+      "codeRepository": "https://github.com/jay0n9/paperroach",
+      "url": "https://jay0n9.github.io/paperroach/"
+    }
+  </script>
+  <title>PaperRoach — Local-first paper knowledge</title>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-copy="skip">Skip to content</a>
+
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="PaperRoach home" data-label-copy="homeLabel">
+      <svg class="brand-mark" viewBox="0 0 42 42" aria-hidden="true">
+        <path d="M10 5.5h16l6 6V35H10z"/>
+        <path d="M26 5.5v7h6M15 20h12M15 25h9M8 14 4 10M34 14l4-4"/>
+      </svg>
+      <span>PaperRoach</span>
+      <span class="alpha">alpha</span>
+    </a>
+
+    <nav class="site-nav" aria-label="Primary navigation" data-label-copy="navLabel">
+      <a href="#workflow" data-copy="navWorkflow">Workflow</a>
+      <a href="#install" data-copy="navInstall">Install</a>
+      <a href="#principles" data-copy="navPrinciples">Why local</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="language-toggle" type="button" aria-label="한국어로 보기">
+        <span aria-hidden="true">EN</span>
+        <span class="toggle-track"><span></span></span>
+        <span aria-hidden="true">한</span>
+      </button>
+      <a class="github-link" href="https://github.com/jay0n9/paperroach" target="_blank" rel="noreferrer" aria-label="GitHub" data-label-copy="githubLabel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8a11.4 11.4 0 0 0-3.6 22.2c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11 11 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.1v3.1c0 .4.2.7.8.6A11.4 11.4 0 0 0 12 .8Z"/></svg>
+        <span data-copy="github">GitHub</span>
+      </a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot"></span><span data-copy="eyebrow">Local-first research pipeline</span></p>
+        <h1 data-copy="heroTitle">Your papers should not disappear after you read them.</h1>
+        <p class="hero-lede" data-copy="heroLede">PaperRoach turns Zotero PDFs into linked, searchable Obsidian notes with models running through Ollama.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#install">
+            <span data-copy="startInstall">Start installing</span>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6"/></svg>
+          </a>
+          <a class="button button-quiet" href="https://github.com/jay0n9/paperroach/blob/main/INSTALL.md" target="_blank" rel="noreferrer" data-copy="fullGuide">Read the full guide</a>
+        </div>
+        <ul class="trust-list" aria-label="Project commitments" data-label-copy="trustLabel">
+          <li><span aria-hidden="true">●</span><span data-copy="trustTelemetry">No telemetry</span></li>
+          <li><span aria-hidden="true">●</span><span data-copy="trustZotero">Zotero stays read-only</span></li>
+          <li><span aria-hidden="true">●</span><span data-copy="trustLicense">MIT licensed</span></li>
+        </ul>
+      </div>
+
+      <div class="pipeline-stage" role="img" aria-label="PaperRoach workflow preview: a Zotero PDF is processed by local Ollama models into an editable, linked Obsidian note." data-label-copy="workflowPreviewLabel">
+        <div class="stage-topbar">
+          <span data-copy="stageLabel">WORKFLOW PREVIEW / ONE PAPER</span>
+          <span class="stage-state"><span></span><span data-copy="stageLocal">LOCAL</span></span>
+        </div>
+
+        <div class="stage-workbench">
+          <article class="source-card stage-card">
+            <div class="card-label"><span>ZOTERO</span><span>PDF</span></div>
+            <div class="paper-icon" aria-hidden="true">
+              <span>PDF</span>
+              <i></i><i></i><i></i>
+            </div>
+            <p class="stage-paper-title">Attention Is All You Need</p>
+            <p>Vaswani et al. · 2017</p>
+            <div class="tag-row"><span>transformer</span><span>NLP</span></div>
+          </article>
+
+          <div class="data-rail" aria-hidden="true">
+            <span class="rail-line"></span>
+            <span class="rail-packet packet-a">TEXT</span>
+            <span class="rail-packet packet-b">META</span>
+            <span class="rail-packet packet-c">LINKS</span>
+          </div>
+
+          <article class="note-card stage-card">
+            <div class="card-label"><span>OBSIDIAN</span><span>MARKDOWN</span></div>
+            <div class="note-window">
+              <div class="window-dots"><i></i><i></i><i></i></div>
+              <p class="yaml">tags: [transformer, attention]</p>
+              <p class="note-heading note-h1"># Attention Is All You Need</p>
+              <p class="note-heading">## TL;DR</p>
+              <p>Introduces the Transformer, replacing recurrence with attention.</p>
+              <p class="note-heading">## Concepts</p>
+              <p><span class="wikilink">[[Self-attention]]</span> · <span class="wikilink">[[Positional encoding]]</span></p>
+              <p class="note-heading">## My Notes</p>
+              <p class="cursor-line"><span data-copy="notePreserved">Your writing is preserved here.</span><i></i></p>
+            </div>
+          </article>
+        </div>
+
+        <ol class="stage-steps">
+          <li class="is-active"><span>01</span><strong data-copy="flowRead">Read</strong><small data-copy="flowReadSmall">PDF + Zotero metadata</small></li>
+          <li><span>02</span><strong data-copy="flowUnderstand">Understand</strong><small data-copy="flowUnderstandSmall">Ollama on your machine</small></li>
+          <li><span>03</span><strong data-copy="flowConnect">Connect</strong><small data-copy="flowConnectSmall">Notes + semantic index</small></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="statement" aria-label="Core idea" data-label-copy="coreIdeaLabel">
+      <p data-copy="statement">A paper folder stores files. <strong>PaperRoach builds memory.</strong></p>
+    </section>
+
+    <section class="workflow section-shell" id="workflow">
+      <div class="section-heading">
+        <p class="eyebrow" data-copy="workflowEyebrow">FROM INBOX TO KNOWLEDGE</p>
+        <h2 data-copy="workflowTitle">One pipeline, four useful outcomes.</h2>
+        <p data-copy="workflowLede">Start with one PDF or watch your Zotero library. PaperRoach keeps the source, note, concepts, and search index connected.</p>
+      </div>
+
+      <div class="outcome-grid">
+        <article>
+          <span class="outcome-icon source" aria-hidden="true">PDF</span>
+          <h3 data-copy="outcomeMetadata">Bibliographic context</h3>
+          <p data-copy="outcomeMetadataBody">Title, authors, year, venue, DOI, and tags flow from Zotero when available.</p>
+        </article>
+        <article>
+          <span class="outcome-icon note" aria-hidden="true">MD</span>
+          <h3 data-copy="outcomeNotes">Notes you can edit</h3>
+          <p data-copy="outcomeNotesBody">Structured Markdown lands in your vault. Rebuilds keep everything under “My Notes.”</p>
+        </article>
+        <article>
+          <span class="outcome-icon link" aria-hidden="true">[[]]</span>
+          <h3 data-copy="outcomeLinks">Concept links</h3>
+          <p data-copy="outcomeLinksBody">Important concepts become Obsidian links so each new paper strengthens the graph.</p>
+        </article>
+        <article>
+          <span class="outcome-icon search" aria-hidden="true">⌕</span>
+          <h3 data-copy="outcomeSearch">Local search</h3>
+          <p data-copy="outcomeSearchBody">LanceDB and local embeddings make the library searchable without a hosted knowledge service.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="install section-shell" id="install">
+      <div class="install-intro">
+        <div>
+          <p class="eyebrow" data-copy="installEyebrow">FIRST RUN</p>
+          <h2 data-copy="installTitle">From a clean machine to the first note.</h2>
+        </div>
+        <p data-copy="installLede">Python 3.11–3.12, Obsidian, and Ollama are required. Zotero is optional for manual PDFs and recommended for automatic ingestion.</p>
+      </div>
+
+      <div class="install-layout">
+        <ol class="setup-checklist">
+          <li>
+            <span class="step-number">1</span>
+            <div>
+              <h3 data-copy="stepApps">Install the companion apps</h3>
+              <p data-copy="stepAppsBody">Install uv for a current Python 3.12 patch, create or open an Obsidian vault, then install and start Ollama.</p>
+              <div class="resource-links">
+                <a href="https://docs.astral.sh/uv/getting-started/installation/" target="_blank" rel="noreferrer">uv + Python 3.12 ↗</a>
+                <a href="https://obsidian.md/download" target="_blank" rel="noreferrer">Obsidian ↗</a>
+                <a href="https://ollama.com/download" target="_blank" rel="noreferrer">Ollama ↗</a>
+                <a href="https://www.zotero.org/download/" target="_blank" rel="noreferrer">Zotero ↗</a>
+              </div>
+            </div>
+          </li>
+          <li>
+            <span class="step-number">2</span>
+            <div>
+              <h3 data-copy="stepRepo">Download PaperRoach</h3>
+              <p data-copy="stepRepoBody">Clone the repository. Without Git, download and extract the ZIP, open a terminal in that folder, and start at the third command.</p>
+              <a class="zip-link" href="https://github.com/jay0n9/paperroach/archive/refs/heads/main.zip" data-copy="downloadZip">Download the main branch ZIP ↗</a>
+            </div>
+          </li>
+          <li>
+            <span class="step-number">3</span>
+            <div>
+              <h3 data-copy="stepSetup">Run safe setup</h3>
+              <p data-copy="stepSetupBody">PaperRoach finds vaults Obsidian has opened, writes user-level config, detects Zotero when possible, and pulls the required models.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-number">4</span>
+            <div>
+              <h3 data-copy="stepVerify">Verify, then build one PDF</h3>
+              <p data-copy="stepVerifyBody">Doctor explains what is ready. At the prompt, paste the real path to one PDF before scanning the whole library.</p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="terminal-panel">
+          <div class="terminal-tabs" role="tablist" aria-label="Operating system" data-label-copy="osLabel">
+            <button type="button" role="tab" aria-selected="true" aria-controls="windows-code" id="windows-tab" data-os="windows">Windows</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="unix-code" id="unix-tab" data-os="unix">macOS / Linux</button>
+          </div>
+          <div class="terminal-title">
+            <span><i></i><i></i><i></i></span>
+            <small data-copy="terminalTitle">SETUP TERMINAL</small>
+            <button class="copy-button" type="button" data-copy-target="active">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 6V3h10v10h-3M3 7h10v10H3z"/></svg>
+              <span data-copy="copy" aria-live="polite">Copy</span>
+            </button>
+          </div>
+          <pre id="windows-code" class="code-panel" role="tabpanel" aria-labelledby="windows-tab" tabindex="0"><code><span class="prompt">&gt;</span> git clone https://github.com/jay0n9/paperroach.git
+<span class="prompt">&gt;</span> cd paperroach
+<span class="prompt">&gt;</span> uv python install 3.12
+<span class="prompt">&gt;</span> uv venv --python 3.12 .venv
+<span class="prompt">&gt;</span> uv pip install --python .venv .
+<span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach setup --pull-models
+<span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach doctor
+<span class="prompt">&gt;</span> # Paste the full path to one PDF when prompted.
+<span class="prompt">&gt;</span> $pdf = (Read-Host "PDF path").Trim().Trim('"')
+<span class="prompt">&gt;</span> .\.venv\Scripts\python.exe -m paperroach build $pdf</code></pre>
+          <pre id="unix-code" class="code-panel" role="tabpanel" aria-labelledby="unix-tab" tabindex="0" hidden><code><span class="prompt">$</span> git clone https://github.com/jay0n9/paperroach.git
+<span class="prompt">$</span> cd paperroach
+<span class="prompt">$</span> uv python install 3.12
+<span class="prompt">$</span> uv venv --python 3.12 .venv
+<span class="prompt">$</span> uv pip install --python .venv .
+<span class="prompt">$</span> ./.venv/bin/python -m paperroach setup --pull-models
+<span class="prompt">$</span> ./.venv/bin/python -m paperroach doctor
+<span class="prompt">$</span> # Paste the full path to one PDF when prompted.
+<span class="prompt">$</span> printf 'PDF path: '; IFS= read -r pdf
+<span class="prompt">$</span> ./.venv/bin/python -m paperroach build "$pdf"</code></pre>
+          <div class="terminal-result">
+            <span class="check">✓</span>
+            <p><strong data-copy="setupDone">Setup is repeatable and non-destructive.</strong><small data-copy="setupDoneSmall">Existing vault files and custom settings are left alone.</small></p>
+          </div>
+          <a class="terminal-guide" href="https://github.com/jay0n9/paperroach/blob/main/INSTALL.md" target="_blank" rel="noreferrer"><span data-copy="openGuide">Open the step-by-step installation guide</span><span>↗</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="principles section-shell" id="principles">
+      <div class="section-heading compact">
+        <p class="eyebrow" data-copy="principlesEyebrow">DESIGNED FOR OWNERSHIP</p>
+        <h2 data-copy="principlesTitle">Your research system should still work when a service does not.</h2>
+      </div>
+      <div class="principle-list">
+        <article>
+          <span class="principle-index">LOCAL</span>
+          <h3 data-copy="localTitle">Inference where you choose</h3>
+          <p data-copy="localBody">The default Ollama host is localhost. If you configure a remote host, extracted text and requested figure images go there—nowhere else.</p>
+        </article>
+        <article>
+          <span class="principle-index">PLAIN</span>
+          <h3 data-copy="plainTitle">Markdown, not a silo</h3>
+          <p data-copy="plainBody">Generated notes are ordinary files in your Obsidian vault. Read them, edit them, version them, or leave PaperRoach.</p>
+        </article>
+        <article>
+          <span class="principle-index">OPEN</span>
+          <h3 data-copy="openTitle">MIT licensed and inspectable</h3>
+          <p data-copy="openBody">Use it, fork it, and help shape it. The project is early alpha, so honest issues and focused pull requests matter.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="closing">
+      <div>
+        <p class="eyebrow" data-copy="closingEyebrow">YOUR NEXT PAPER</p>
+        <h2 data-copy="closingTitle">Read it once. Keep it useful.</h2>
+      </div>
+      <div class="closing-actions">
+        <a class="button button-inverse" href="#install"><span data-copy="installNow">Install PaperRoach</span><span>↓</span></a>
+        <a href="https://github.com/jay0n9/paperroach/issues" target="_blank" rel="noreferrer" data-copy="askQuestion">Ask a question on GitHub ↗</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand footer-brand" href="#top">
+      <svg class="brand-mark" viewBox="0 0 42 42" aria-hidden="true"><path d="M10 5.5h16l6 6V35H10z"/><path d="M26 5.5v7h6M15 20h12M15 25h9M8 14 4 10M34 14l4-4"/></svg>
+      <span>PaperRoach</span>
+    </a>
+    <p><span data-copy="footer">Local-first paper knowledge. Built in the open.</span> <span>© 2026 UJAM Studio.</span></p>
+    <div>
+      <a href="https://github.com/jay0n9/paperroach/blob/main/LICENSE" target="_blank" rel="noreferrer">MIT License</a>
+      <a href="https://github.com/jay0n9/paperroach" target="_blank" rel="noreferrer">GitHub</a>
+    </div>
+  </footer>
+</body>
+</html>

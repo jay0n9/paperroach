@@ -63,8 +63,13 @@ def _concept_row(concept_id: str, note_path: Path | str) -> dict:
     }
 
 
-def _write_generated_note(path: Path) -> None:
+def _write_generated_note(path: Path, source_path: Path | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    source_line = (
+        f'kb-source: "{source_path.as_posix()}"'
+        if source_path is not None
+        else ""
+    )
     path.write_text(
         "\n".join(
             [
@@ -72,6 +77,7 @@ def _write_generated_note(path: Path) -> None:
                 "Type:",
                 "- Paper",
                 "kb-generated: true",
+                source_line,
                 "---",
                 f"# {path.stem}",
                 "",
@@ -122,8 +128,12 @@ class GCTests(unittest.TestCase):
             duplicate = cfg.references_path / "Test Paper (2024) (2).md"
             missing_note = cfg.references_path / "Missing Paper.md"
             missing_concept = cfg.knowledge_library_path / "Missing Concept.md"
-            _write_generated_note(keeper)
-            _write_generated_note(duplicate)
+            first_source = Path(td) / "first.pdf"
+            second_source = Path(td) / "second.pdf"
+            first_source.write_bytes(b"same paper bytes")
+            second_source.write_bytes(b"same paper bytes")
+            _write_generated_note(keeper, first_source)
+            _write_generated_note(duplicate, second_source)
 
             store.docs.add(
                 [
@@ -155,6 +165,42 @@ class GCTests(unittest.TestCase):
             self.assertEqual(reopened.concepts.count_rows(), 0)
             self.assertTrue(keeper.exists())
             self.assertFalse(duplicate.exists())
+
+    def test_gc_keeps_same_title_year_when_source_bytes_differ(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _cfg(Path(td))
+            store = KBStore(cfg)
+            first = cfg.references_path / "Shared Title (2024).md"
+            second = cfg.references_path / "Shared Title (2024) (2).md"
+            first_source = Path(td) / "first.pdf"
+            second_source = Path(td) / "second.pdf"
+            first_source.write_bytes(b"first paper")
+            second_source.write_bytes(b"different paper")
+            _write_generated_note(first, first_source)
+            _write_generated_note(second, second_source)
+            store.docs.add(
+                [
+                    _doc_row("aaaaaaaaaaaa", "Shared Title", first),
+                    _doc_row("bbbbbbbbbbbb", "Shared Title", second),
+                ]
+            )
+            store.chunks.add(
+                [
+                    _chunk_row("aaaaaaaaaaaa", first),
+                    _chunk_row("bbbbbbbbbbbb", second),
+                ]
+            )
+
+            result, output = _capture_gc(cfg, apply=True)
+
+            self.assertEqual(result["removed"], 0)
+            self.assertEqual(result["possible_duplicates"], 2)
+            self.assertIn("Possible title matches: 2", output)
+            self.assertIn("Review possible title matches manually", output)
+            self.assertNotIn("Store is clean.", output)
+            self.assertEqual(store.docs.count_rows(), 2)
+            self.assertTrue(first.exists())
+            self.assertTrue(second.exists())
 
 
 if __name__ == "__main__":

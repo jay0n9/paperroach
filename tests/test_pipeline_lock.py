@@ -3,10 +3,13 @@ import os
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from kb.config import Config
-from kb.pipeline import PipelineLock, PipelineLockError
+from kb.pipeline import PipelineLock, PipelineLockError, watch
 
 
 class PipelineLockTests(unittest.TestCase):
@@ -56,6 +59,44 @@ class PipelineLockTests(unittest.TestCase):
                 )
 
             self.assertTrue(lock.path.exists())
+
+    def test_automatic_heartbeat_keeps_a_long_running_lock_fresh(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = self._config(Path(td))
+            with PipelineLock(
+                config,
+                "long-running",
+                stale_seconds=0.1,
+                heartbeat_interval=0.02,
+            ):
+                time.sleep(0.16)
+                with self.assertRaises(PipelineLockError):
+                    with PipelineLock(config, "second", stale_seconds=0.1):
+                        pass
+
+    def test_watcher_does_not_hold_writer_lock_between_polls(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = self._config(root)
+            zotero_dir = root / "zotero"
+            zotero_dir.mkdir()
+            acquired = []
+
+            def interrupt_after_proving_lock_is_free(_seconds):
+                with PipelineLock(config, "manual"):
+                    acquired.append(True)
+                raise KeyboardInterrupt
+
+            with (
+                redirect_stdout(StringIO()),
+                patch("kb.pipeline.zotero.find_data_dir", return_value=zotero_dir),
+                patch("kb.pipeline.zotero.storage_pdfs", return_value=[]),
+                patch("kb.pipeline.time.sleep", side_effect=interrupt_after_proving_lock_is_free),
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    watch(config)
+
+            self.assertEqual(acquired, [True])
 
 
 if __name__ == "__main__":
