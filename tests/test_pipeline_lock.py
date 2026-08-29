@@ -68,8 +68,24 @@ class PipelineLockTests(unittest.TestCase):
                 "long-running",
                 stale_seconds=0.1,
                 heartbeat_interval=0.02,
-            ):
+            ) as lock:
+                initial_mtime = lock.path.stat().st_mtime
                 time.sleep(0.16)
+
+                # Hosted runners can delay the heartbeat thread beyond one
+                # nominal interval. Prove that it refreshed a lock held past
+                # the stale window, then race the second writer while the
+                # observed heartbeat still has a generous freshness margin.
+                deadline = time.monotonic() + 1.0
+                while True:
+                    current_mtime = lock.path.stat().st_mtime
+                    age = time.time() - current_mtime
+                    if current_mtime > initial_mtime and age < 0.05:
+                        break
+                    if time.monotonic() >= deadline:
+                        self.fail("heartbeat did not refresh the long-running lock")
+                    time.sleep(0.005)
+
                 with self.assertRaises(PipelineLockError):
                     with PipelineLock(config, "second", stale_seconds=0.1):
                         pass
