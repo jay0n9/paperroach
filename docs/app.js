@@ -11,26 +11,48 @@ const copy = {
     navInstall: "Install",
     navPrinciples: "Why local",
     github: "GitHub",
-    eyebrow: "Local-first research pipeline",
-    heroTitle: "Your papers should not disappear after you read them.",
-    heroLede: "PaperRoach turns Zotero PDFs into linked, searchable Obsidian notes with models running through Ollama.",
-    heroDemoBadge: "SOURCE-CHECKED",
-    heroDemoTitle: "Actual Markdown, rendered from a real paper.",
-    heroDemoOpen: "Open full viewer ↗",
-    heroDemoFrameLabel: "Rendered reviewed PaperRoach Markdown note from the public case study",
+    eyebrow: "Public case / one local run",
+    heroTitle: "This one PDF produced one paper note and four concept notes.",
+    heroLede: "Open the unchanged 14-page input, the publication-sanitized machine draft generated from it, and all four derivative drafts from that local run. Source-checked copies and corrections stay public beside them.",
+    heroDemoBadge: "ONE LOCAL RUN",
+    heroDemoTitle: "Generated lineage above. Source-checked view below.",
+    heroDemoOpen: "Inspect full case ↗",
     startInstall: "Start installing",
     fullGuide: "Read the full guide",
     trustTelemetry: "No telemetry",
     trustZotero: "Zotero stays read-only",
     trustLicense: "MIT licensed",
-    stageLabel: "LIVE MARKDOWN / PUBLIC CASE",
-    stageLocal: "ACTUAL FILE",
-    flowRead: "Read",
-    flowReadSmall: "PDF + Zotero metadata",
-    flowUnderstand: "Understand",
-    flowUnderstandSmall: "Ollama on your machine",
-    flowConnect: "Connect",
-    flowConnectSmall: "Notes + semantic index",
+    stageLabel: "ACTUAL GENERATED LINEAGE / PUBLIC CASE",
+    stageLocal: "FILES ARE PUBLIC",
+    lineageLabel: "Actual artifact lineage: source PDF to paper note to four concept notes",
+    lineageSource: "SOURCE PDF",
+    lineageSourceName: "Unchanged article",
+    lineageSourceMeta: "14 pages · CC BY 4.0",
+    lineagePaperNote: "PAPER NOTE",
+    lineagePaperNoteName: "Generated paper-note draft",
+    lineageReviewedMeta: "Source-checked sibling opens below",
+    lineageConcepts: "CONCEPT NOTES",
+    lineageConceptCount: "4 generated concept drafts",
+    lineageConceptMeta: "Generated from paper-note.generated.md",
+    lineagePreviewReviewedAction: "Preview its source-checked sibling",
+    conceptAffective: "Affective Dynamics Model",
+    conceptRelaxation: "Exponential Relaxation",
+    conceptBaseline: "Individual Baseline",
+    conceptRegulation: "Regulation Effect",
+    lineagePreviewLabel: "Selected actual artifact preview",
+    lineageActionsLabel: "Selected artifact actions",
+    lineageStatusSource: "UNCHANGED SOURCE",
+    lineageStatusReviewed: "SOURCE-CHECKED COPY",
+    lineageFrameSuffix: "source-checked Markdown preview",
+    lineageOpenDraft: "Generated draft ↗",
+    lineageOpenFile: "Open file ↗",
+    lineagePdfPreviewLabel: "Open the unchanged source PDF",
+    lineageProof: "Arrows follow *.generated.md; preview defaults to source-checked sibling files.",
+    lineageProofShort: "Generated lineage · source-checked preview",
+    lineageCredit: "Pellert, Schweighofer & Garcia (2020) · © The Author(s) 2020 · CC BY 4.0",
+    lineageCreditShort: "Pellert et al. (2020) · CC BY 4.0",
+    lineageProvenanceLabel: "Source and provenance links",
+    lineageAttribution: "Credit ↗",
     statement: "A paper folder stores files. <strong>PaperRoach builds memory.</strong>",
     workflowEyebrow: "FROM INBOX TO KNOWLEDGE",
     workflowTitle: "One pipeline, four useful outcomes.",
@@ -43,7 +65,7 @@ const copy = {
     outcomeLinksBody: "Important concepts become Obsidian links so each new paper strengthens the graph.",
     outcomeSearch: "Local search",
     outcomeSearchBody: "LanceDB and local embeddings make the library searchable without a hosted knowledge service.",
-    outputEyebrow: "REAL OUTPUT / ONE LOCAL RUN",
+    outputEyebrow: "SEPARATE OUTPUT EXAMPLE / ANOTHER RUN",
     outputTitle: "Feed it one real PDF. Here’s what lands in Obsidian.",
     outputLede: "This sanitized excerpt comes from an actual 24-page paper processed with PaperRoach. It is generated Markdown, not a mockup.",
     outputRun: "REAL RUN",
@@ -111,26 +133,48 @@ const copy = {
     navInstall: "설치",
     navPrinciples: "로컬을 택한 이유",
     github: "GitHub",
-    eyebrow: "로컬 우선 논문 지식 파이프라인",
-    heroTitle: "읽은 논문이 다시 사라지지 않게.",
-    heroLede: "PaperRoach는 Zotero PDF를 서로 연결되고 검색 가능한 Obsidian 노트로 바꿉니다. 모델은 Ollama를 통해 실행됩니다.",
-    heroDemoBadge: "원문 대조 완료",
-    heroDemoTitle: "실제 논문에서 나온 Markdown을 그대로 렌더링했습니다.",
-    heroDemoOpen: "전체 뷰어 열기 ↗",
-    heroDemoFrameLabel: "공개 사례의 원문 대조를 마친 PaperRoach Markdown 노트",
+    eyebrow: "공개 사례 / 한 번의 로컬 실행",
+    heroTitle: "이 PDF 한 편에서 정리 노트 한 개와 개념 노트 네 개가 나왔습니다.",
+    heroLede: "한 번의 로컬 실행에 사용한 변경 없는 14쪽 원문과, 그 실행에서 생성된 공개용 Markdown 및 네 개의 파생 초안을 직접 열어보세요. 원문 대조본과 수정 내역도 함께 공개합니다.",
+    heroDemoBadge: "로컬 실행 1회",
+    heroDemoTitle: "위에는 실제 생성 계보, 아래에는 원문 대조본을 보여줍니다.",
+    heroDemoOpen: "전체 사례 살펴보기 ↗",
     startInstall: "설치 시작하기",
     fullGuide: "전체 가이드 읽기",
     trustTelemetry: "텔레메트리 없음",
     trustZotero: "Zotero 읽기 전용",
     trustLicense: "MIT 라이선스",
-    stageLabel: "실제 MARKDOWN / 공개 사례",
-    stageLocal: "실제 파일",
-    flowRead: "읽기",
-    flowReadSmall: "PDF + Zotero 서지 정보",
-    flowUnderstand: "이해하기",
-    flowUnderstandSmall: "내 컴퓨터의 Ollama",
-    flowConnect: "연결하기",
-    flowConnectSmall: "노트 + 의미 검색 색인",
+    stageLabel: "실제 생성 계보 / 공개 사례",
+    stageLocal: "전체 파일 공개",
+    lineageLabel: "실제 산출물 연결: 원문 PDF에서 정리 노트와 네 개의 개념 노트까지",
+    lineageSource: "원문 PDF",
+    lineageSourceName: "원문 그대로",
+    lineageSourceMeta: "14쪽 · CC BY 4.0",
+    lineagePaperNote: "정리 노트",
+    lineagePaperNoteName: "생성된 논문 정리 초안",
+    lineageReviewedMeta: "아래에는 원문 대조본 표시",
+    lineageConcepts: "파생 개념 노트",
+    lineageConceptCount: "생성된 개념 초안 4개",
+    lineageConceptMeta: "paper-note.generated.md에서 파생",
+    lineagePreviewReviewedAction: "대응 원문 대조본 미리보기",
+    conceptAffective: "정서 역학 모델",
+    conceptRelaxation: "지수 이완",
+    conceptBaseline: "개인 기준선",
+    conceptRegulation: "조절 효과",
+    lineagePreviewLabel: "선택한 실제 산출물 미리보기",
+    lineageActionsLabel: "선택한 산출물 작업",
+    lineageStatusSource: "원문 그대로",
+    lineageStatusReviewed: "원문 대조본",
+    lineageFrameSuffix: "원문 대조 Markdown 미리보기",
+    lineageOpenDraft: "실제 생성 초안 ↗",
+    lineageOpenFile: "파일 열기 ↗",
+    lineagePdfPreviewLabel: "변경되지 않은 원문 PDF 열기",
+    lineageProof: "화살표는 *.generated.md 계보입니다. 미리보기는 대응 원문 대조본을 기본으로 엽니다.",
+    lineageProofShort: "생성 계보 · 원문 대조 미리보기",
+    lineageCredit: "Pellert, Schweighofer & Garcia (2020) · © The Author(s) 2020 · CC BY 4.0",
+    lineageCreditShort: "Pellert 외 (2020) · CC BY 4.0",
+    lineageProvenanceLabel: "출처 및 계보 링크",
+    lineageAttribution: "출처 ↗",
     statement: "논문 폴더는 파일을 모읍니다. <strong>PaperRoach는 기억을 만듭니다.</strong>",
     workflowEyebrow: "받은 논문에서 지식까지",
     workflowTitle: "하나의 흐름, 네 가지 쓸모.",
@@ -143,7 +187,7 @@ const copy = {
     outcomeLinksBody: "핵심 개념을 Obsidian 링크로 만들어 논문이 늘어날수록 지식 그래프도 단단해집니다.",
     outcomeSearch: "로컬 검색",
     outcomeSearchBody: "LanceDB와 로컬 임베딩으로 별도 호스팅 지식 서비스 없이 전체 라이브러리를 검색합니다.",
-    outputEyebrow: "실제 결과 / 로컬 실행 1회",
+    outputEyebrow: "별도 산출물 예시 / 다른 로컬 실행",
     outputTitle: "실제 PDF 한 편을 넣으면, Obsidian에 이렇게 남습니다.",
     outputLede: "PaperRoach가 실제 24쪽 논문을 처리한 결과에서 로컬 경로와 내부 식별자만 제거했습니다. 목업이 아니라 생성된 Markdown입니다.",
     outputRun: "실제 실행",
@@ -239,6 +283,7 @@ function setLanguage(language) {
   document.title = next === "ko"
     ? "PaperRoach — 로컬 우선 논문 지식"
     : "PaperRoach — Local-first paper knowledge";
+  updateLineagePreviewCopy();
   if (canStore) localStorage.setItem("paperroach-language", next);
 }
 
@@ -299,20 +344,100 @@ document.querySelector(".copy-button").addEventListener("click", async (event) =
   }, 1800);
 });
 
-const stageSteps = [...document.querySelectorAll(".stage-steps li")];
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-let stageTimer;
+const lineageNodes = [...document.querySelectorAll("[data-lineage-file]")];
+const lineageFrame = document.querySelector(".lineage-preview iframe");
+const lineagePdfPreview = document.querySelector(".lineage-pdf-preview");
+const lineagePath = document.querySelector("[data-lineage-path]");
+const lineageOpen = document.querySelector("[data-lineage-open]");
+const lineageDraft = document.querySelector("[data-lineage-draft-link]");
+const caseRoot = "examples/affective-dynamics/";
 
-function startStageCycle() {
-  window.clearInterval(stageTimer);
-  if (reducedMotion.matches) return;
-  let activeIndex = 0;
-  stageTimer = window.setInterval(() => {
-    stageSteps[activeIndex].classList.remove("is-active");
-    activeIndex = (activeIndex + 1) % stageSteps.length;
-    stageSteps[activeIndex].classList.add("is-active");
-  }, 2400);
+function lineageViewerUrl(path, embedded = false) {
+  const params = new URLSearchParams({ file: path });
+  if (embedded) params.set("embed", "1");
+  return `${caseRoot}markdown-viewer.html?${params}`;
 }
 
-startStageCycle();
-reducedMotion.addEventListener("change", startStageCycle);
+function updateLineagePreviewCopy() {
+  const activeNode = document.querySelector("[data-lineage-file].is-selected");
+  const status = document.querySelector("[data-lineage-status]");
+  const frame = document.querySelector(".lineage-preview iframe");
+  if (!activeNode || !status || !frame) return;
+  const language = root.dataset.language || "en";
+  const statusKey = activeNode.dataset.lineageStatusCopy;
+  const name = activeNode.querySelector(".lineage-node-name")?.textContent.trim();
+  status.textContent = copy[language][statusKey] || "";
+  status.lang = language;
+  if (!frame.hidden && name) {
+    frame.title = `${name} — ${copy[language].lineageFrameSuffix}`;
+  }
+}
+
+function selectLineageArtifact(node, focus = false) {
+  lineageNodes.forEach((candidate) => {
+    const selected = candidate === node;
+    candidate.classList.toggle("is-selected", selected);
+    candidate.setAttribute("aria-pressed", String(selected));
+  });
+
+  const path = node.dataset.lineageFile;
+  const draftPath = node.dataset.lineageDraft;
+  const isPdf = node.dataset.lineageKind === "pdf";
+  lineagePath.textContent = path;
+
+  if (isPdf) {
+    const pdfUrl = `${caseRoot}${path}`;
+    lineageOpen.href = pdfUrl;
+    lineageDraft.hidden = true;
+    lineagePdfPreview.href = pdfUrl;
+    lineagePdfPreview.hidden = false;
+    lineageFrame.hidden = true;
+  } else {
+    const frameUrl = lineageViewerUrl(path, true);
+    lineageOpen.href = lineageViewerUrl(path);
+    lineageDraft.href = draftPath ? lineageViewerUrl(draftPath) : "";
+    lineageDraft.hidden = !draftPath;
+    if (lineageFrame.getAttribute("src") !== frameUrl) lineageFrame.src = frameUrl;
+    lineageFrame.hidden = false;
+    lineagePdfPreview.hidden = true;
+  }
+
+  updateLineagePreviewCopy();
+  if (focus) node.focus();
+}
+
+lineageNodes.forEach((node, index) => {
+  node.addEventListener("click", () => selectLineageArtifact(node));
+  node.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    let nextIndex = index;
+    if (event.key === "ArrowLeft") nextIndex = (index - 1 + lineageNodes.length) % lineageNodes.length;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % lineageNodes.length;
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = lineageNodes.length - 1;
+    selectLineageArtifact(lineageNodes[nextIndex], true);
+  });
+});
+
+window.addEventListener("message", (event) => {
+  if (
+    event.origin !== window.location.origin ||
+    event.source !== lineageFrame.contentWindow ||
+    lineageFrame.hidden ||
+    event.data?.type !== "paperroach:artifact-change"
+  ) return;
+
+  const node = lineageNodes.find((candidate) => candidate.dataset.lineageFile === event.data.path);
+  if (!node) return;
+  lineageNodes.forEach((candidate) => {
+    const selected = candidate === node;
+    candidate.classList.toggle("is-selected", selected);
+    candidate.setAttribute("aria-pressed", String(selected));
+  });
+  lineagePath.textContent = node.dataset.lineageFile;
+  lineageOpen.href = lineageViewerUrl(node.dataset.lineageFile);
+  lineageDraft.href = lineageViewerUrl(node.dataset.lineageDraft);
+  lineageDraft.hidden = false;
+  updateLineagePreviewCopy();
+});

@@ -213,10 +213,10 @@
     });
   }
 
-  function viewerUrl(path, hash = "") {
+  function viewerUrl(path, hash = "", includeEmbed = embedded) {
     const url = new URL("markdown-viewer.html", baseUrl);
     url.searchParams.set("file", path);
-    if (embedded) url.searchParams.set("embed", "1");
+    if (includeEmbed) url.searchParams.set("embed", "1");
     url.hash = hash;
     return url;
   }
@@ -252,8 +252,14 @@
         const targetUrl = new URL(rawHref, baseUrl);
         const targetPath = targetUrl.searchParams.get("file");
         if (targetPath && documentByPath.has(targetPath)) {
-          link.href = viewerUrl(targetPath, targetUrl.hash);
-          link.dataset.viewerFile = targetPath;
+          if (embedded && documentByPath.get(targetPath).state === "provenance") {
+            link.href = viewerUrl(targetPath, targetUrl.hash, false);
+            link.rel = "noopener noreferrer";
+            link.target = "_blank";
+          } else {
+            link.href = viewerUrl(targetPath, targetUrl.hash);
+            link.dataset.viewerFile = targetPath;
+          }
         }
         return;
       }
@@ -267,15 +273,23 @@
 
       const localPath = relativeCasePath(resolved);
       if (localPath && documentByPath.has(localPath)) {
-        link.href = viewerUrl(localPath, resolved.hash);
-        link.dataset.viewerFile = localPath;
+        if (embedded && documentByPath.get(localPath).state === "provenance") {
+          link.href = viewerUrl(localPath, resolved.hash, false);
+          link.rel = "noopener noreferrer";
+          link.target = "_blank";
+        } else {
+          link.href = viewerUrl(localPath, resolved.hash);
+          link.dataset.viewerFile = localPath;
+        }
         return;
       }
 
       link.href = resolved.href;
-      if (resolved.origin !== window.location.origin) {
+      if (embedded) {
         link.rel = "noopener noreferrer";
-        if (embedded) link.target = "_blank";
+        link.target = "_blank";
+      } else if (resolved.origin !== window.location.origin) {
+        link.rel = "noopener noreferrer";
       }
     });
   }
@@ -381,6 +395,12 @@
       const source = await getSource(activeDocument.path, activeController.signal);
       if (currentPath !== activeDocument.path) return;
       finish(activeDocument, source);
+      if (embedded && window.parent !== window) {
+        window.parent.postMessage(
+          { type: "paperroach:artifact-change", path: activeDocument.path },
+          window.location.origin
+        );
+      }
       if (targetHash) {
         scrollToHash(targetHash);
       } else if (options.scroll && !embedded) {
