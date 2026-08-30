@@ -52,7 +52,7 @@
     </a>
 
     <nav class="site-nav" aria-label="Primary navigation" data-label-copy="navLabel">
-      <a href="#output" data-copy="navOutput">Real example</a>
+      <a href="#live-demo" data-copy="navOutput">Live demo</a>
       <a href="#install" data-copy="navInstall">Install</a>
       <a href="#principles" data-copy="navPrinciples">Why local</a>
     </nav>
@@ -72,6 +72,38 @@
 
   <main id="main">
     <section class="hero" id="top">
+      <aside class="pipeline-stage landing-demo-stage" id="live-demo" aria-labelledby="landing-demo-title">
+        <div class="stage-topbar">
+          <span data-copy="stageLabel">LIVE MARKDOWN / PUBLIC CASE</span>
+          <span class="stage-state"><span></span><span data-copy="stageLocal">ACTUAL FILE</span></span>
+        </div>
+
+        <div class="landing-demo-meta">
+          <div class="landing-demo-identity">
+            <span class="landing-demo-badge" data-copy="heroDemoBadge">SOURCE-CHECKED</span>
+            <div>
+              <strong id="landing-demo-title" data-copy="heroDemoTitle">Actual Markdown, rendered from a real paper.</strong>
+              <code>processed/paper-note.md</code>
+            </div>
+          </div>
+          <a class="landing-demo-open" href="examples/affective-dynamics/markdown-viewer.html?file=processed%2Fpaper-note.md" target="_blank" rel="noreferrer" data-copy="heroDemoOpen">Open full viewer ↗</a>
+        </div>
+
+        <div class="landing-demo-frame">
+          <iframe
+            src="examples/affective-dynamics/markdown-viewer.html?file=processed%2Fpaper-note.md&amp;embed=1"
+            title="Rendered reviewed PaperRoach Markdown note"
+            data-label-copy="heroDemoFrameLabel"
+          ></iframe>
+        </div>
+
+        <ol class="stage-steps">
+          <li class="is-active"><span>01</span><strong data-copy="flowRead">Read</strong><small data-copy="flowReadSmall">PDF + Zotero metadata</small></li>
+          <li><span>02</span><strong data-copy="flowUnderstand">Understand</strong><small data-copy="flowUnderstandSmall">Ollama on your machine</small></li>
+          <li><span>03</span><strong data-copy="flowConnect">Connect</strong><small data-copy="flowConnectSmall">Notes + semantic index</small></li>
+        </ol>
+      </aside>
+
       <div class="hero-copy">
         <p class="eyebrow"><span class="status-dot"></span><span data-copy="eyebrow">Local-first research pipeline</span></p>
         <h1 data-copy="heroTitle">Your papers should not disappear after you read them.</h1>
@@ -88,54 +120,6 @@
           <li><span aria-hidden="true">●</span><span data-copy="trustZotero">Zotero stays read-only</span></li>
           <li><span aria-hidden="true">●</span><span data-copy="trustLicense">MIT licensed</span></li>
         </ul>
-      </div>
-
-      <div class="pipeline-stage" role="img" aria-label="PaperRoach workflow preview: a Zotero PDF is processed by local Ollama models into an editable, linked Obsidian note." data-label-copy="workflowPreviewLabel">
-        <div class="stage-topbar">
-          <span data-copy="stageLabel">WORKFLOW PREVIEW / ONE PAPER</span>
-          <span class="stage-state"><span></span><span data-copy="stageLocal">LOCAL</span></span>
-        </div>
-
-        <div class="stage-workbench">
-          <article class="source-card stage-card">
-            <div class="card-label"><span>ZOTERO</span><span>PDF</span></div>
-            <div class="paper-icon" aria-hidden="true">
-              <span>PDF</span>
-              <i></i><i></i><i></i>
-            </div>
-            <p class="stage-paper-title">Attention Is All You Need</p>
-            <p>Vaswani et al. · 2017</p>
-            <div class="tag-row"><span>transformer</span><span>NLP</span></div>
-          </article>
-
-          <div class="data-rail" aria-hidden="true">
-            <span class="rail-line"></span>
-            <span class="rail-packet packet-a">TEXT</span>
-            <span class="rail-packet packet-b">META</span>
-            <span class="rail-packet packet-c">LINKS</span>
-          </div>
-
-          <article class="note-card stage-card">
-            <div class="card-label"><span>OBSIDIAN</span><span>MARKDOWN</span></div>
-            <div class="note-window">
-              <div class="window-dots"><i></i><i></i><i></i></div>
-              <p class="yaml">tags: [transformer, attention]</p>
-              <p class="note-heading note-h1"># Attention Is All You Need</p>
-              <p class="note-heading">## TL;DR</p>
-              <p>Introduces the Transformer, replacing recurrence with attention.</p>
-              <p class="note-heading">## Concepts</p>
-              <p><span class="wikilink">[[Self-attention]]</span> · <span class="wikilink">[[Positional encoding]]</span></p>
-              <p class="note-heading">## My Notes</p>
-              <p class="cursor-line"><span data-copy="notePreserved">Your writing is preserved here.</span><i></i></p>
-            </div>
-          </article>
-        </div>
-
-        <ol class="stage-steps">
-          <li class="is-active"><span>01</span><strong data-copy="flowRead">Read</strong><small data-copy="flowReadSmall">PDF + Zotero metadata</small></li>
-          <li><span>02</span><strong data-copy="flowUnderstand">Understand</strong><small data-copy="flowUnderstandSmall">Ollama on your machine</small></li>
-          <li><span>03</span><strong data-copy="flowConnect">Connect</strong><small data-copy="flowConnectSmall">Notes + semantic index</small></li>
-        </ol>
       </div>
     </section>
 
