@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "case_id": "affective-dynamics-pellert-2020",
+  "title": "The individual dynamics of affective expression on social media",
+  "published_on": "2026-08-30",
+  "generation": {
+    "generated_on": "2026-07-27",
+    "software": "PaperRoach",
+    "software_version": "not recorded (historic pre-publication local run)",
+    "inference_runtime": "Ollama",
+    "model_tag": "not recorded",
+    "environment": "local"
+  },
+  "source": {
+    "authors": [
+      "Max Pellert",
+      "Simon Schweighofer",
+      "David Garcia"
+    ],
+    "year": 2020,
+    "venue": "EPJ Data Science 9, article 1",
+    "doi": "10.1140/epjds/s13688-019-0219-3",
+    "doi_url": "https://doi.org/10.1140/epjds/s13688-019-0219-3",
+    "publisher_url": "https://link.springer.com/article/10.1140/epjds/s13688-019-0219-3",
+    "copyright": "© The Author(s) 2020",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "pdf_pages": 14,
+    "pdf_bytes": 2187171,
+    "pdf_sha256": "0104a812332e9ab0e0be0bf4786e10af0c33d7bac376a65a63cf89e759c82cc8",
+    "reproduction": "unchanged"
+  },
+  "artifacts": [
+    {
+      "id": "source-pdf",
+      "role": "source",
+      "label": "Original article PDF",
+      "path": "original/pellert-et-al-2020.pdf",
+      "media_type": "application/pdf",
+      "bytes": 2187171,
+      "sha256": "0104a812332e9ab0e0be0bf4786e10af0c33d7bac376a65a63cf89e759c82cc8",
+      "review_state": "publisher-version-unchanged",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "paper-note-generated",
+      "role": "generated",
+      "label": "Actual generated paper note (sanitized)",
+      "path": "processed/paper-note.generated.md",
+      "media_type": "text/markdown",
+      "bytes": 10637,
+      "sha256": "bf0efec0e6ccbdeed1544b4f5fcf34880b38d4d7b04e63690b67f8c0f1803332",
+      "review_state": "unreviewed; local path and internal ID redacted",
+      "derived_from": "source-pdf",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "paper-note-reviewed",
+      "role": "reviewed",
+      "label": "Source-checked paper note",
+      "path": "processed/paper-note.md",
+      "media_type": "text/markdown",
+      "bytes": 7159,
+      "sha256": "8139fe42719d9cff68ce74fecf86bd1db2434e8bfdf5acaf7e919439b818c2b3",
+      "review_state": "source-checked; corrections documented",
+      "derived_from": ["source-pdf", "paper-note-generated"],
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "affective-dynamics-model-generated",
+      "role": "generated",
+      "label": "Affective Dynamics Model — generated draft",
+      "path": "derivatives/affective-dynamics-model.generated.md",
+      "media_type": "text/markdown",
+      "bytes": 4259,
+      "sha256": "8d9a375d1b40b9d531010e8689aa875244dcee3882c785618f80dc19283810ab",
+      "review_state": "unreviewed",
+      "derived_from": "paper-note-generated",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "affective-dynamics-model-reviewed",
+      "role": "reviewed",
+      "label": "Affective Dynamics Model — reviewed",
+      "path": "derivatives/affective-dynamics-model.md",
+      "media_type": "text/markdown",
+      "bytes": 2546,
+      "sha256": "5020bb799d083230c79c15f3b896a43ce75081f6a2285a49d0ffce716071a3f0",
+      "review_state": "source-checked",
+      "derived_from": ["source-pdf", "affective-dynamics-model-generated"],
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "exponential-relaxation-generated",
+      "role": "generated",
+      "label": "Exponential Relaxation — generated draft",
+      "path": "derivatives/exponential-relaxation.generated.md",
+      "media_type": "text/markdown",
+      "bytes": 3864,
+      "sha256": "d58c5dbe58ca82683d5bb5684d8c09ae73148f32148493e4cc18225d2707944b",
+      "review_state": "unreviewed",
+      "derived_from": "paper-note-generated",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "exponential-relaxation-reviewed",
+      "role": "reviewed",
+      "label": "Exponential Relaxation — reviewed",
+      "path": "derivatives/exponential-relaxation.md",
+      "media_type": "text/markdown",
+      "bytes": 2303,
+      "sha256": "34b81c9c51dc30ce67312cc76cff7c6b76e57c16992e21901fa61e9a8fae8031",
+      "review_state": "source-checked",
+      "derived_from": ["source-pdf", "exponential-relaxation-generated"],
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "individual-baseline-generated",
+      "role": "generated",
+      "label": "Individual Baseline — generated draft",
+      "path": "derivatives/individual-baseline.generated.md",
+      "media_type": "text/markdown",
+      "bytes": 4024,
+      "sha256": "a5f5f261e81628b535e2d8ee312910d6973b3fa1df64dc224b810dd6ed989ac9",
+      "review_state": "unreviewed",
+      "derived_from": "paper-note-generated",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "individual-baseline-reviewed",
+      "role": "reviewed",
+      "label": "Individual Baseline — reviewed",
+      "path": "derivatives/individual-baseline.md",
+      "media_type": "text/markdown",
+      "bytes": 2212,
+      "sha256": "3c74a4e9a4b453259747fd940e89b16329c36e8b2384677f09b81c1deae5fa73",
+      "review_state": "source-checked",
+      "derived_from": ["source-pdf", "individual-baseline-generated"],
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "regulation-effect-generated",
+      "role": "generated",
+      "label": "Regulation Effect — generated draft",
+      "path": "derivatives/regulation-effect.generated.md",
+      "media_type": "text/markdown",
+      "bytes": 4099,
+      "sha256": "85a14e04c1d3ee1db46f5242689e582026fa01e0967e10b5ebdac50aaf0e684f",
+      "review_state": "unreviewed",
+      "derived_from": "paper-note-generated",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "regulation-effect-reviewed",
+      "role": "reviewed",
+      "label": "Regulation Effect — reviewed",
+      "path": "derivatives/regulation-effect.md",
+      "media_type": "text/markdown",
+      "bytes": 2252,
+      "sha256": "a77d3782794f04fac66374c9ebbf4ae23e71da2a53256c3db80f40c05f4172dc",
+      "review_state": "source-checked",
+      "derived_from": ["source-pdf", "regulation-effect-generated"],
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "attribution",
+      "role": "provenance",
+      "label": "Attribution and licenses",
+      "path": "ATTRIBUTION.md",
+      "media_type": "text/markdown",
+      "bytes": 1684,
+      "sha256": "b3f7d42091aa02d06e525df61ce5167e605c5a72dd17b8f398f9304b0ccef008",
+      "review_state": "maintainer-authored",
+      "license": "MIT"
+    },
+    {
+      "id": "change-log",
+      "role": "provenance",
+      "label": "Public review change log",
+      "path": "CHANGELOG.md",
+      "media_type": "text/markdown",
+      "bytes": 2813,
+      "sha256": "48162f6819ff1abdd22c070f1dc7a4e84bf6d07ddd80e38a795c751377b9607b",
+      "review_state": "maintainer-authored",
+      "license": "MIT"
+    },
+    {
+      "id": "bundle-readme",
+      "role": "provenance",
+      "label": "Case bundle README",
+      "path": "README.md",
+      "media_type": "text/markdown",
+      "bytes": 1119,
+      "sha256": "7265f4a2e00b305573a311c6919d07fcdbcc4e5fe803c0e16bb2bd91558548aa",
+      "review_state": "maintainer-authored",
+      "license": "MIT"
+    }
+  ],
+  "pre_redaction_generated_hashes": {
+    "paper_note": {
+      "bytes": 10019,
+      "sha256": "587d0084ed171335e5abf8fcac214e3d2ef8d3a6633cbb48257ee5257541668f"
+    },
+    "affective_dynamics_model": {
+      "bytes": 3558,
+      "sha256": "b5ee20e68fe6839ff1ee6efb00f7b63ab83233b4f1f154930c5496c137d12570"
+    },
+    "exponential_relaxation": {
+      "bytes": 3161,
+      "sha256": "cf29c505afaf6a2590a0bcee1afa61d1c5a401255bd1fd90d1a2990a9e5b92ed"
+    },
+    "individual_baseline": {
+      "bytes": 3321,
+      "sha256": "02709fc7a937c8cf71648623a8609561e5948b4c7b50cc09a1dd3839ffece7c8"
+    },
+    "regulation_effect": {
+      "bytes": 3396,
+      "sha256": "dd325ce12eaa49a73317c5ad4f88b05396ba93fda23af5f8eb17ad0e60bb150b"
+    }
+  },
+  "transformations": {
+    "generated_copies": [
+      "redacted one absolute Zotero path",
+      "redacted one local document ID",
+      "added an unreviewed-output warning and portable attribution notice",
+      "normalized published Markdown to LF line endings and removed trailing whitespace"
+    ],
+    "reviewed_copies": [
+      "corrected classification and article-number metadata",
+      "corrected formula transcription",
+      "separated per-user baselines from pooled parameter estimates",
+      "narrowed causal and clinical wording",
+      "added source-reported values and limitations"
+    ],
+    "details": "CHANGELOG.md"
+  },
+  "excluded": [
+    {
+      "item": "Facebook/MyPersonality study dataset",
+      "reason": "not distributed with the article or this case bundle"
+    }
+  ]
+}

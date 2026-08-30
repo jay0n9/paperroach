@@ -3,6 +3,7 @@
 [![CI](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml/badge.svg)](https://github.com/jay0n9/paperroach/actions/workflows/ci.yml)
 
 [Website](https://jay0n9.github.io/paperroach/) ·
+[Complete public case study](https://jay0n9.github.io/paperroach/examples/affective-dynamics/) ·
 [Installation guide](https://github.com/jay0n9/paperroach/blob/main/INSTALL.md) ·
 [Issues](https://github.com/jay0n9/paperroach/issues)
 
@@ -10,6 +11,12 @@ PaperRoach is a local-first paper knowledge pipeline for researchers who keep
 papers in Zotero and notes in Obsidian. It turns PDFs and Markdown notes into a
 linked Obsidian knowledge library, backed by LanceDB vector search and local
 Ollama models.
+
+Want to inspect the output before installing? The
+[complete public case study](https://jay0n9.github.io/paperroach/examples/affective-dynamics/)
+includes an unchanged CC BY 4.0 source PDF, the actual generated Markdown,
+a source-checked copy, four derivative concept notes, checksums, and every
+documented correction.
 
 The project is designed for modest GPUs. The LLM and embedding model are never
 kept resident together: PaperRoach extracts and analyzes first, unloads the

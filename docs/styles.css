@@ -820,6 +820,61 @@ h1 {
   margin-bottom: clamp(45px, 6vw, 72px);
 }
 
+.case-study-promo {
+  display: grid;
+  grid-template-columns: minmax(150px, .36fr) minmax(270px, 1.15fr) minmax(240px, .85fr) auto;
+  gap: 18px 28px;
+  align-items: center;
+  min-height: 104px;
+  padding: 21px 23px;
+  border: 1px solid var(--ink);
+  border-bottom: 0;
+  background:
+    linear-gradient(90deg, rgb(5 117 104 / 12%) 0 8px, transparent 8px),
+    var(--paper-bright);
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.case-study-promo:hover {
+  background:
+    linear-gradient(90deg, var(--local) 0 8px, transparent 8px),
+    white;
+  transform: translateY(-3px);
+}
+
+.case-study-promo-label,
+.case-study-promo-body,
+.case-study-promo-action {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.case-study-promo-label {
+  color: var(--local);
+  font-weight: 800;
+}
+
+.case-study-promo strong {
+  font-family: var(--display);
+  font-size: 21px;
+  letter-spacing: -.035em;
+  line-height: 1.08;
+}
+
+.case-study-promo-body {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.case-study-promo-action {
+  justify-self: end;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .real-run-bar {
   display: flex;
   min-height: 50px;
@@ -1653,6 +1708,19 @@ html[data-language="ko"] h1 {
 }
 
 @media (max-width: 1120px) {
+  .case-study-promo {
+    grid-template-columns: minmax(150px, .45fr) minmax(0, 1fr) auto;
+  }
+
+  .case-study-promo-body {
+    grid-column: 2;
+  }
+
+  .case-study-promo-action {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
   .site-header {
     grid-template-columns: 1fr auto;
     grid-template-rows: 66px 42px;
@@ -1860,6 +1928,34 @@ html[data-language="ko"] h1 {
   .real-output {
     margin-top: 76px;
     padding-top: 62px;
+  }
+
+  .case-study-promo {
+    grid-template-columns: 1fr;
+    gap: 9px;
+    padding: 22px 19px 24px;
+    border-bottom: 1px solid var(--ink);
+    background:
+      linear-gradient(180deg, var(--local) 0 7px, transparent 7px),
+      var(--paper-bright);
+  }
+
+  .case-study-promo:hover {
+    background:
+      linear-gradient(180deg, var(--local) 0 7px, transparent 7px),
+      white;
+  }
+
+  .case-study-promo-body,
+  .case-study-promo-action {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+
+  .case-study-promo-action {
+    margin-top: 8px;
+    white-space: normal;
   }
 
   .real-run-bar {

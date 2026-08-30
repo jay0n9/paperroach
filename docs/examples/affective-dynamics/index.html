@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en" data-language="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef3f1">
+  <meta name="description" content="A complete PaperRoach case study: copyright-cleared source PDF, actual generated Markdown, reviewed note, derivative concept notes, licenses, and checksums.">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="PaperRoach public case study — source to derivative notes">
+  <meta property="og:description" content="Open the original CC BY 4.0 paper, inspect the actual machine output, and compare four reviewed derivative notes.">
+  <meta property="og:url" content="https://jay0n9.github.io/paperroach/examples/affective-dynamics/">
+  <meta property="og:image" content="https://jay0n9.github.io/paperroach/assets/social-card.png">
+  <link rel="canonical" href="https://jay0n9.github.io/paperroach/examples/affective-dynamics/">
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../styles.css">
+  <link rel="stylesheet" href="case-study.css">
+  <script src="case-study.js" defer></script>
+  <title>PaperRoach public case study — source to derivative notes</title>
+</head>
+<body class="case-page">
+  <a class="skip-link" href="#case-main" data-copy="skip">Skip to case study</a>
+
+  <header class="site-header">
+    <a class="brand" href="../../" aria-label="Back to the PaperRoach home page" data-label-copy="homeLabel">
+      <svg class="brand-mark" viewBox="0 0 42 42" aria-hidden="true">
+        <path d="M10 5.5h16l6 6V35H10z"/>
+        <path d="M26 5.5v7h6M15 20h12M15 25h9M8 14 4 10M34 14l4-4"/>
+      </svg>
+      <span>PaperRoach</span>
+      <span class="alpha">case file 01</span>
+    </a>
+
+    <nav class="site-nav" aria-label="Case study navigation" data-label-copy="navLabel">
+      <a href="#provenance" data-copy="navChain">Provenance</a>
+      <a href="#original" data-copy="navSource">Original PDF</a>
+      <a href="#processed" data-copy="navNotes">Notes</a>
+      <a href="#files" data-copy="navFiles">Files</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="language-toggle" type="button" aria-label="한국어로 보기">
+        <span aria-hidden="true">EN</span>
+        <span class="toggle-track"><span></span></span>
+        <span aria-hidden="true">한</span>
+      </button>
+      <a class="github-link" href="https://github.com/jay0n9/paperroach" target="_blank" rel="noreferrer" aria-label="Open the PaperRoach repository on GitHub" data-label-copy="githubLabel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8a11.4 11.4 0 0 0-3.6 22.2c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11 11 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.1v3.1c0 .4.2.7.8.6A11.4 11.4 0 0 0 12 .8Z"/></svg>
+        <span data-copy="github">GitHub</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="case-main" id="case-main">
+    <section class="case-hero">
+      <div class="case-shell">
+        <nav class="case-breadcrumb" aria-label="Breadcrumb">
+          <a href="../../" data-copy="breadcrumbHome">PaperRoach</a>
+          <span aria-hidden="true">/</span>
+          <span data-copy="breadcrumbExamples">Public examples</span>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page" data-copy="breadcrumbCurrent">Affective dynamics</span>
+        </nav>
+
+        <div class="case-hero-grid">
+          <div>
+            <p class="case-eyebrow"><span data-copy="heroEyebrow">PUBLIC CASE FILE / ACTUAL LOCAL RUN</span><span class="case-status" data-copy="heroStatus">SOURCE-CHECKED</span></p>
+            <h1 data-copy="heroTitle">One paper. One generated note. Four ideas that keep working.</h1>
+            <p class="case-hero-lede" data-copy="heroLede">Open the unchanged paper, inspect PaperRoach's actual Markdown draft, compare the reviewed copy, and follow every derivative concept note. Nothing is hidden behind a screenshot.</p>
+            <div class="case-hero-actions">
+              <a class="case-action case-action-primary" href="original/pellert-et-al-2020.pdf" target="_blank" rel="noreferrer"><span data-copy="openPdf">Open the original PDF</span><span aria-hidden="true">↗</span></a>
+              <a class="case-action case-action-quiet" href="#processed" data-copy="inspectNote">Inspect the processed note</a>
+              <a class="case-action case-action-quiet" href="manifest.json" target="_blank" rel="noreferrer" data-copy="openManifest">Open the manifest</a>
+            </div>
+          </div>
+
+          <aside class="case-dossier-stamp" aria-label="License status">
+            <p data-copy="verifiedSource">Verified source</p>
+            <strong data-copy="licenseValue">CC BY 4.0</strong>
+            <small data-copy="licenseLabel">Original + adaptations</small>
+            <a href="ATTRIBUTION.md" target="_blank" rel="noreferrer" data-copy="licenseLink">Read attribution and licenses →</a>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <dl class="case-summary case-shell">
+      <div><dt data-copy="metricSize">Original PDF</dt><dd>2.09 MiB</dd></div>
+      <div><dt data-copy="metricPages">Source length</dt><dd data-copy="metricPagesValue">14 pages</dd></div>
+      <div><dt data-copy="metricProcessed">Processed note</dt><dd data-copy="metricProcessedValue">generated + reviewed</dd></div>
+      <div><dt data-copy="metricDerived">Derivative notes</dt><dd data-copy="metricDerivedValue">4 generated + 4 reviewed</dd></div>
+    </dl>
+
+    <section class="case-section" id="provenance">
+      <div class="case-shell">
+        <div class="case-section-heading">
+          <span class="case-section-index" data-copy="chainIndex">01 / PROVENANCE</span>
+          <div>
+            <h2 data-copy="chainTitle">Follow the evidence, not a marketing screenshot.</h2>
+            <p data-copy="chainLede">Each artifact declares what came before it, what changed, and whether it has been checked against the source.</p>
+          </div>
+        </div>
+
+        <ol class="case-chain">
+          <li>
+            <div class="case-chain-step"><span data-copy="chainSource">Source</span><span>01</span></div>
+            <h3 data-copy="chainSourceTitle">Unchanged article PDF</h3>
+            <p data-copy="chainSourceBody">The publisher-licensed PDF is copied byte-for-byte and checksummed.</p>
+            <code>sha256:0104a812332e…</code>
+          </li>
+          <li>
+            <div class="case-chain-step"><span data-copy="chainGenerate">Generate</span><span>02</span></div>
+            <h3 data-copy="chainGenerateTitle">Actual local output</h3>
+            <p data-copy="chainGenerateBody">PaperRoach turns the PDF and metadata into one paper note and four concept drafts.</p>
+            <code>*.generated.md × 5</code>
+          </li>
+          <li>
+            <div class="case-chain-step"><span data-copy="chainReview">Review</span><span>03</span></div>
+            <h3 data-copy="chainReviewTitle">Corrections stay visible</h3>
+            <p data-copy="chainReviewBody">The raw drafts remain available; formula, scope, and classification fixes live in sibling files.</p>
+            <code>CHANGELOG.md</code>
+          </li>
+          <li>
+            <div class="case-chain-step"><span data-copy="chainPublish">Publish</span><span>04</span></div>
+            <h3 data-copy="chainPublishTitle">Open files, not images</h3>
+            <p data-copy="chainPublishBody">PDF, Markdown, hashes, attribution, and changes all have direct public URLs.</p>
+            <code>manifest.json + SHA256SUMS.txt</code>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="case-section" id="original">
+      <div class="case-shell">
+        <div class="case-section-heading">
+          <span class="case-section-index" data-copy="sourceIndex">02 / ORIGINAL</span>
+          <div>
+            <h2 data-copy="sourceTitle">Read the exact paper PaperRoach received.</h2>
+            <p data-copy="sourceLede">This 2.09 MiB file is included unchanged. The first page carries the CC BY 4.0 notice, and the checksum matches the local source.</p>
+          </div>
+        </div>
+
+        <div class="case-source-layout">
+          <aside class="case-source-meta">
+            <dl>
+              <div><dt data-copy="sourceAuthors">Authors</dt><dd>Max Pellert · Simon Schweighofer · David Garcia</dd></div>
+              <div><dt data-copy="sourcePublished">Published</dt><dd>EPJ Data Science 9 · 2020 · article 1</dd></div>
+              <div><dt data-copy="sourceDoi">DOI</dt><dd><a href="https://doi.org/10.1140/epjds/s13688-019-0219-3" target="_blank" rel="noreferrer">10.1140/epjds/s13688-019-0219-3 ↗</a></dd></div>
+              <div><dt data-copy="sourceLicense">License</dt><dd><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a></dd></div>
+              <div><dt data-copy="sourceChecksum">SHA-256</dt><dd><code class="case-hash">0104a812332e9ab0e0be0bf4786e10af0c33d7bac376a65a63cf89e759c82cc8</code></dd></div>
+              <div><dt data-copy="sourceData">Study data</dt><dd data-copy="sourceDataValue">Not included</dd></div>
+            </dl>
+          </aside>
+
+          <div class="case-pdf-frame">
+            <div class="case-frame-bar"><span data-copy="pdfBar">ORIGINAL / 14-PAGE PDF</span><span>2,187,171 bytes</span></div>
+            <object class="case-pdf-object" data="original/pellert-et-al-2020.pdf#page=1&amp;view=FitH" type="application/pdf" title="The individual dynamics of affective expression on social media — original PDF">
+              <p class="case-pdf-fallback"><span data-copy="pdfFallback">Your browser cannot embed the PDF here.</span> <a href="original/pellert-et-al-2020.pdf" target="_blank" rel="noreferrer" data-copy="openPdf">Open the original PDF</a></p>
+            </object>
+            <div class="case-pdf-mobile">
+              <p data-copy="pdfMobile">The inline viewer is replaced by a lighter link on small screens.</p>
+              <a class="case-action case-action-primary" href="original/pellert-et-al-2020.pdf" target="_blank" rel="noreferrer" data-copy="openPdf">Open the original PDF</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="case-section" id="processed">
+      <div class="case-shell">
+        <div class="case-section-heading">
+          <span class="case-section-index" data-copy="notesIndex">03 / PROCESSED</span>
+          <div>
+            <h2 data-copy="notesTitle">See the machine draft and the reviewed note side by side.</h2>
+            <p data-copy="notesLede">The generated file only redacts a local path and internal ID. The public copy corrects documented errors without erasing the original output.</p>
+          </div>
+        </div>
+
+        <div class="case-note-layout">
+          <article class="case-note-window" lang="en">
+            <header class="case-note-bar"><span data-copy="reviewedBar">REVIEWED MARKDOWN / DEFAULT READING COPY</span><span>paper-note.md</span></header>
+            <div class="case-note-body">
+              <div class="case-frontmatter">
+                <span>type: Paper</span><span>year: 2020</span>
+                <span>domain: Affective Computing</span><span>review: source-checked</span>
+                <span>license: CC BY 4.0</span><span>kb-generated: true</span>
+              </div>
+              <h3>The individual dynamics of affective expression on social media</h3>
+              <h4 data-copy="noteTldr">TL;DR</h4>
+              <p>This paper tests a computational model of affective dynamics using Facebook status updates. Text-derived valence and arousal return exponentially toward an individual-specific baseline, while expression is associated with an immediate proportional movement toward that baseline.</p>
+              <h4 data-copy="noteApproach">Model</h4>
+              <p class="case-equation" aria-label="Expected affective state equation">E[xᵢ(t+Δt)] = e<sup>−γΔt</sup>(xᵢ(t)−μᵢ)+μᵢ</p>
+              <h4 data-copy="noteResults">Reported fit</h4>
+              <div class="case-result-line" aria-label="Reported fit values">
+                <span>kᵥ = 0.38</span><span>kₐ = 0.45</span><span>γᵥ = 0.0070 s⁻¹</span><span>γₐ = 0.0105 s⁻¹</span>
+              </div>
+              <h4 data-copy="noteLimits">Review boundary</h4>
+              <p data-copy="noteLimitsBody">The reviewed note describes text-derived affective expression and avoids turning an observational coefficient into a causal or clinical claim.</p>
+            </div>
+          </article>
+
+          <aside class="case-review-ledger">
+            <h3 data-copy="reviewTitle">What review changed</h3>
+            <ul>
+              <li data-copy="reviewClass">Corrected the Computer Vision misclassification.</li>
+              <li data-copy="reviewFormula">Restored γₐ, kₐ, and εₐ in the arousal equation.</li>
+              <li data-copy="reviewMethod">Separated per-user baselines from pooled model fitting.</li>
+              <li data-copy="reviewScope">Added observational, sampling, and prediction limits.</li>
+            </ul>
+            <div class="case-file-actions">
+              <a class="case-action case-action-primary" href="processed/paper-note.md" target="_blank" rel="noreferrer" data-copy="openReviewed">Open reviewed .md</a>
+              <a class="case-action case-action-quiet" href="processed/paper-note.generated.md" target="_blank" rel="noreferrer" data-copy="openGenerated">Open generated draft</a>
+              <a class="case-action case-action-quiet" href="CHANGELOG.md" target="_blank" rel="noreferrer" data-copy="viewChanges">View all changes</a>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="case-section" id="derived">
+      <div class="case-shell">
+        <div class="case-section-heading">
+          <span class="case-section-index" data-copy="derivedIndex">04 / DERIVED</span>
+          <div>
+            <h2 data-copy="derivedTitle">A paper becomes a small, inspectable knowledge graph.</h2>
+            <p data-copy="derivedLede">Expand each branch for a rendered summary, then open either the reviewed concept or the publication-sanitized generated draft.</p>
+          </div>
+        </div>
+
+        <div class="case-graph">
+          <article class="case-graph-source">
+            <span data-copy="graphSourceLabel">DERIVED FROM PAPER NOTE</span>
+            <h3 data-copy="graphSourceTitle">Affective expression on social media</h3>
+            <p data-copy="graphSourceBody">Four Obsidian wikilinks became standalone concept files.</p>
+          </article>
+
+          <div class="case-branches">
+            <details class="case-branch" open>
+              <summary><span class="case-branch-index">C-01</span><span>Affective Dynamics Model</span><span class="case-branch-toggle" aria-hidden="true">+</span></summary>
+              <div class="case-branch-body">
+                <p><strong data-copy="definitionLabel">Reviewed definition</strong> — <span data-copy="concept1Body">A two-component model for baseline-centered expressed valence and arousal: an instantaneous expression-associated adjustment plus continuous mean reversion.</span></p>
+                <p><strong data-copy="evidenceLabel">Source evidence</strong> — <span data-copy="concept1Evidence">Pooled fit over 16,863,066 consecutive status-update pairs.</span></p>
+                <div class="case-file-actions">
+                  <a class="case-action case-action-primary" href="derivatives/affective-dynamics-model.md" target="_blank" rel="noreferrer" data-copy="openReviewed">Open reviewed .md</a>
+                  <a class="case-action case-action-quiet" href="derivatives/affective-dynamics-model.generated.md" target="_blank" rel="noreferrer" data-copy="openGenerated">Open generated draft</a>
+                </div>
+              </div>
+            </details>
+
+            <details class="case-branch">
+              <summary><span class="case-branch-index">C-02</span><span>Exponential Relaxation</span><span class="case-branch-toggle" aria-hidden="true">+</span></summary>
+              <div class="case-branch-body">
+                <p><strong data-copy="definitionLabel">Reviewed definition</strong> — <span data-copy="concept2Body">A mean-reverting process whose distance from an individual baseline shrinks by an exponential factor over time.</span></p>
+                <p><strong data-copy="evidenceLabel">Source evidence</strong> — <span data-copy="concept2Evidence">Arousal relaxed faster than valence in the fitted model.</span></p>
+                <div class="case-file-actions">
+                  <a class="case-action case-action-primary" href="derivatives/exponential-relaxation.md" target="_blank" rel="noreferrer" data-copy="openReviewed">Open reviewed .md</a>
+                  <a class="case-action case-action-quiet" href="derivatives/exponential-relaxation.generated.md" target="_blank" rel="noreferrer" data-copy="openGenerated">Open generated draft</a>
+                </div>
+              </div>
+            </details>
+
+            <details class="case-branch">
+              <summary><span class="case-branch-index">C-03</span><span>Individual Baseline</span><span class="case-branch-toggle" aria-hidden="true">+</span></summary>
+              <div class="case-branch-body">
+                <p><strong data-copy="definitionLabel">Reviewed definition</strong> — <span data-copy="concept3Body">A person's long-run average expressed valence or arousal in the analyzed status updates.</span></p>
+                <p><strong data-copy="evidenceLabel">Source evidence</strong> — <span data-copy="concept3Evidence">Aggregate means were 5.88 for valence and 4.13 for arousal on 1–9 scales.</span></p>
+                <div class="case-file-actions">
+                  <a class="case-action case-action-primary" href="derivatives/individual-baseline.md" target="_blank" rel="noreferrer" data-copy="openReviewed">Open reviewed .md</a>
+                  <a class="case-action case-action-quiet" href="derivatives/individual-baseline.generated.md" target="_blank" rel="noreferrer" data-copy="openGenerated">Open generated draft</a>
+                </div>
+              </div>
+            </details>
+
+            <details class="case-branch">
+              <summary><span class="case-branch-index">C-04</span><span>Regulation Effect</span><span class="case-branch-toggle" aria-hidden="true">+</span></summary>
+              <div class="case-branch-body">
+                <p><strong data-copy="definitionLabel">Reviewed definition</strong> — <span data-copy="concept4Body">The model's immediate proportional movement of baseline-centered expression toward zero, represented by k.</span></p>
+                <p><strong data-copy="evidenceLabel">Source evidence</strong> — <span data-copy="concept4Evidence">The fitted values were kᵥ = 0.38 and kₐ = 0.45.</span></p>
+                <div class="case-file-actions">
+                  <a class="case-action case-action-primary" href="derivatives/regulation-effect.md" target="_blank" rel="noreferrer" data-copy="openReviewed">Open reviewed .md</a>
+                  <a class="case-action case-action-quiet" href="derivatives/regulation-effect.generated.md" target="_blank" rel="noreferrer" data-copy="openGenerated">Open generated draft</a>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="case-section" id="files">
+      <div class="case-shell">
+        <div class="case-section-heading">
+          <span class="case-section-index" data-copy="filesIndex">05 / FILES</span>
+          <div>
+            <h2 data-copy="filesTitle">Every public artifact, size, and checksum.</h2>
+            <p data-copy="filesLede">The browser loads this inventory from the same manifest that tools can consume. Open any file directly.</p>
+          </div>
+        </div>
+
+        <p class="case-inventory-status" aria-live="polite" data-copy="inventoryLoading">Loading manifest…</p>
+        <ol class="case-inventory">
+          <li class="case-inventory-item">
+            <span class="case-file-role">source</span>
+            <div class="case-file-info"><strong class="case-file-title">Original article PDF</strong><code class="case-file-path">original/pellert-et-al-2020.pdf</code></div>
+            <span class="case-file-size">2.09 MiB</span><code class="case-hash">sha256:0104a812332e…</code>
+            <a class="case-file-link" href="original/pellert-et-al-2020.pdf" target="_blank" rel="noreferrer">Open ↗</a>
+          </li>
+          <li class="case-inventory-item">
+            <span class="case-file-role">generated</span>
+            <div class="case-file-info"><strong class="case-file-title">Actual generated paper note</strong><code class="case-file-path">processed/paper-note.generated.md</code></div>
+            <span class="case-file-size">Markdown</span><code class="case-hash">manifest</code>
+            <a class="case-file-link" href="processed/paper-note.generated.md" target="_blank" rel="noreferrer">Open ↗</a>
+          </li>
+          <li class="case-inventory-item">
+            <span class="case-file-role">reviewed</span>
+            <div class="case-file-info"><strong class="case-file-title">Source-checked paper note</strong><code class="case-file-path">processed/paper-note.md</code></div>
+            <span class="case-file-size">Markdown</span><code class="case-hash">manifest</code>
+            <a class="case-file-link" href="processed/paper-note.md" target="_blank" rel="noreferrer">Open ↗</a>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="case-section" id="license">
+      <div class="case-shell">
+        <div class="case-section-heading">
+          <span class="case-section-index" data-copy="legalIndex">06 / LICENSE &amp; REVIEW</span>
+          <div>
+            <h2 data-copy="legalTitle">Reuse is allowed. Attribution and changes travel with it.</h2>
+            <p data-copy="legalLede">The paper's license permits sharing and adaptation when credit, the license link, and change notice are supplied.</p>
+          </div>
+        </div>
+
+        <div class="case-legal-grid">
+          <article>
+            <h3 data-copy="legalSourceTitle">Copyright-safe source</h3>
+            <p data-copy="legalSourceBody">Pellert, Schweighofer, and Garcia (2020) is published by EPJ Data Science under CC BY 4.0. The bundled PDF is unchanged; the notes are identified adaptations.</p>
+            <ul>
+              <li><a href="https://link.springer.com/article/10.1140/epjds/s13688-019-0219-3" target="_blank" rel="noreferrer">Publisher article ↗</a></li>
+              <li><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a></li>
+              <li><a href="ATTRIBUTION.md" target="_blank" rel="noreferrer" data-copy="legalAttribution">Open attribution</a></li>
+            </ul>
+          </article>
+          <article>
+            <h3 data-copy="legalReviewTitle">Honest model output</h3>
+            <p data-copy="legalReviewBody">Generated drafts are labeled unreviewed. Corrected copies, source checks, redactions, and unknown run metadata are documented instead of guessed.</p>
+            <ul>
+              <li><a href="CHANGELOG.md" target="_blank" rel="noreferrer" data-copy="legalChangelog">Open change log</a></li>
+              <li><a href="manifest.json" target="_blank" rel="noreferrer">manifest.json ↗</a></li>
+              <li><a href="SHA256SUMS.txt" target="_blank" rel="noreferrer">SHA256SUMS.txt ↗</a></li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="case-footer case-shell">
+    <p data-copy="footer">A complete PaperRoach example: source, transformation, review, and derivatives.</p>
+    <a href="../../#output" data-copy="backHome">Back to PaperRoach →</a>
+  </footer>
+</body>
+</html>
