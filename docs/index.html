@@ -52,7 +52,7 @@
     </a>
 
     <nav class="site-nav" aria-label="Primary navigation" data-label-copy="navLabel">
-      <a href="#workflow" data-copy="navWorkflow">Workflow</a>
+      <a href="#output" data-copy="navOutput">Real example</a>
       <a href="#install" data-copy="navInstall">Install</a>
       <a href="#principles" data-copy="navPrinciples">Why local</a>
     </nav>
@@ -172,6 +172,120 @@
           <p data-copy="outcomeSearchBody">LanceDB and local embeddings make the library searchable without a hosted knowledge service.</p>
         </article>
       </div>
+
+      <section class="real-output" id="output" aria-labelledby="real-output-title">
+        <div class="section-heading output-heading">
+          <p class="eyebrow" data-copy="outputEyebrow">REAL OUTPUT / ONE LOCAL RUN</p>
+          <h3 id="real-output-title" data-copy="outputTitle">Put in one real PDF. This is what lands in Obsidian.</h3>
+          <p data-copy="outputLede">This sanitized excerpt comes from an actual 24-page paper processed with PaperRoach. It is generated Markdown, not a mockup.</p>
+        </div>
+
+        <div class="real-run-bar">
+          <p><span class="run-light" aria-hidden="true"></span><strong data-copy="outputRun">REAL RUN</strong><span>PaperRoach 0.1.0 · Ollama · Zotero → Obsidian</span></p>
+          <a href="https://doi.org/10.1145/3772318.3790571" target="_blank" rel="noreferrer"><span data-copy="outputSourcePaper">Open the source paper</span> ↗</a>
+        </div>
+
+        <figure class="output-specimen">
+          <article class="sample-source">
+            <header><span>ZOTERO</span><span>PDF / 24 PAGES</span></header>
+            <div class="sample-source-body">
+              <div class="sample-pdf" aria-hidden="true"><span>PDF</span><i></i><i></i><i></i><i></i></div>
+              <p class="sample-kicker" data-copy="outputInputLabel">ACTUAL INPUT</p>
+              <h3>ASafePlace: User-Led Personalization of VR Relaxation via an Art Therapy Activity</h3>
+              <p>Chuyang Zhang et al. · 2026</p>
+              <ul>
+                <li><span data-copy="outputInputMeta">Zotero metadata found</span><strong>✓</strong></li>
+                <li><span data-copy="outputInputText">PDF text extracted</span><strong>✓</strong></li>
+                <li><span data-copy="outputInputFigures">Figures detected</span><strong>11</strong></li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="sample-note">
+            <header class="sample-note-bar"><span>OBSIDIAN</span><span>GENERATED MARKDOWN</span></header>
+            <p class="sample-note-path">2 - Source Material / Papers / HCI / Health &amp; Wellbeing / ASafePlace … (2026).md</p>
+            <div class="sample-note-body" lang="en">
+              <div class="sample-frontmatter">
+                <span>Type: Paper</span><span>Year: 2026</span><span>Domain: HCI</span><span>Subdomain: Health &amp; Wellbeing</span>
+              </div>
+
+              <h3>ASafePlace: User-Led Personalization of VR Relaxation via an Art Therapy Activity</h3>
+              <div class="sample-callout">
+                <strong>Metadata</strong>
+                <span>Chuyang Zhang, Bin Yu, Yuchao Wang, Mansi Yuan, Wanqi Wang, Seungwoo Je, Pengcheng An</span>
+              </div>
+
+              <section class="sample-note-section">
+                <p class="sample-heading">## TL;DR</p>
+                <p>ASafePlace introduces a user-led, AI-assisted VR relaxation system that combines art therapy with personalized virtual environments. The system focuses on personalization and user agency.</p>
+              </section>
+
+              <section class="sample-note-section sample-evidence">
+                <img src="assets/examples/asafeplace-figure-5.png" alt="ASafePlace Figure 5: bar charts compare HRV-SDNN during stress and relaxation sessions, alongside boxplots of the percentage change for four study groups." loading="lazy" width="482" height="168">
+                <div>
+                  <p class="sample-heading">Contextual figure · p. 11</p>
+                  <p>The generated note places the HRV-SDNN chart beside Key Results and explains the change from the stress session to the relaxation session.</p>
+                  <p class="figure-credit">Figure 5 from <a href="https://doi.org/10.1145/3772318.3790571" target="_blank" rel="noreferrer">Zhang et al., <cite>ASafePlace</cite> (CHI ’26)</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.</p>
+                </div>
+              </section>
+
+              <section class="sample-note-section">
+                <p class="sample-heading">## Concepts</p>
+                <p class="sample-wikilinks"><span>[[User-Led Personalization]]</span><span>[[Art Therapy Integration]]</span><span>[[Biofeedback Synchronization]]</span><span>+3</span></p>
+              </section>
+
+              <section class="sample-note-section sample-my-notes">
+                <p class="sample-heading">## My Notes</p>
+                <p data-copy="outputMyNotes">Your own writing stays here when the note is rebuilt.</p>
+              </section>
+            </div>
+          </article>
+
+          <aside class="sample-ledger" aria-label="Actual run summary" data-label-copy="outputLedgerLabel">
+            <p class="ledger-title" data-copy="outputLedgerTitle">WHAT THE RUN PRODUCED</p>
+            <dl>
+              <div><dt>24</dt><dd data-copy="outputPages">source pages</dd></div>
+              <div><dt>11</dt><dd data-copy="outputFigures">figure assets</dd></div>
+              <div><dt>6</dt><dd data-copy="outputConcepts">concept links</dd></div>
+              <div><dt>1</dt><dd data-copy="outputMarkdown">editable note</dd></div>
+            </dl>
+            <div class="output-tree">
+              <p data-copy="outputFilesTitle">FILES IN THE VAULT</p>
+              <pre>Obsidian Vault/
+├─ 2 - Source Material/
+│  └─ … / ASafePlace … .md
+└─ Assets/PaperRoach/
+   └─ figure-*.png × 11</pre>
+            </div>
+          </aside>
+
+          <figcaption data-copy="outputCaption">Actual output, lightly shortened for the page. Local file paths and identifiers were removed. Model-generated analysis should always be checked against the source paper.</figcaption>
+        </figure>
+
+        <details class="raw-sample">
+          <summary><span data-copy="outputRawSummary">Inspect the raw Markdown excerpt</span><span aria-hidden="true">+</span></summary>
+          <pre tabindex="0"><code>---
+Type: [Paper]
+Authors: Chuyang Zhang et al.
+Year: 2026
+Domain: HCI
+Subdomain: Health &amp; Wellbeing
+kb-generated: true
+---
+# ASafePlace: User-Led Personalization of VR Relaxation
+
+## TL;DR
+ASafePlace introduces a user-led, AI-assisted VR relaxation system…
+
+## Concepts
+- [[User-Led Personalization]]
+- [[Art Therapy Integration]]
+- [[Biofeedback Synchronization]]
+
+## My Notes
+</code></pre>
+        </details>
+      </section>
     </section>
 
     <section class="install section-shell" id="install">
