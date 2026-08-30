@@ -450,6 +450,15 @@
   background: var(--obsidian);
 }
 
+.case-markdown-embed {
+  display: block;
+  width: 100%;
+  height: min(76vh, 790px);
+  min-height: 610px;
+  border: 0;
+  background: var(--paper-bright);
+}
+
 .case-note-body {
   padding: clamp(24px, 4vw, 58px);
 }
@@ -915,6 +924,11 @@
     grid-template-columns: 1fr;
   }
 
+  .case-markdown-embed {
+    height: 72vh;
+    min-height: 540px;
+  }
+
   .case-result-line span {
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -1027,6 +1041,11 @@
 
   .case-note-body {
     padding: 22px 16px;
+  }
+
+  .case-markdown-embed {
+    height: 76vh;
+    min-height: 500px;
   }
 
   .case-pdf-object {

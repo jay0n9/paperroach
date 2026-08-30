@@ -73,8 +73,8 @@
       reviewFormula: "Restored γₐ, kₐ, and εₐ in the arousal equation.",
       reviewMethod: "Separated per-user baselines from pooled model fitting.",
       reviewScope: "Added observational, sampling, and prediction limits.",
-      openReviewed: "Open reviewed .md",
-      openGenerated: "Open generated draft",
+      openReviewed: "View reviewed note",
+      openGenerated: "View generated draft",
       viewChanges: "View all changes",
       derivedIndex: "04 / DERIVED",
       derivedTitle: "A paper becomes a small, inspectable knowledge graph.",
@@ -188,8 +188,8 @@
       reviewFormula: "arousal 식의 γₐ, kₐ, εₐ를 복원했습니다.",
       reviewMethod: "개인별 baseline과 전체 표본 모델 적합을 구분했습니다.",
       reviewScope: "관찰 연구·표본·예측 한계를 추가했습니다.",
-      openReviewed: "교정본 .md 열기",
-      openGenerated: "생성 초안 열기",
+      openReviewed: "교정본 보기",
+      openGenerated: "생성 초안 보기",
       viewChanges: "전체 변경 이력",
       derivedIndex: "04 / 파생본",
       derivedTitle: "논문 한 편이 검증 가능한 작은 지식 그래프가 됩니다.",
@@ -265,6 +265,21 @@
     }).format(value)} ${unit}`;
   }
 
+  function markdownViewerUrl(path) {
+    return `markdown-viewer.html?file=${encodeURIComponent(path)}`;
+  }
+
+  function upgradeMarkdownLinks(rootNode = document) {
+    rootNode.querySelectorAll("a[href]").forEach((link) => {
+      const href = link.getAttribute("href");
+      if (!href || href.startsWith("markdown-viewer.html")) return;
+      const path = href.split(/[?#]/, 1)[0];
+      if (/\.md$/i.test(path) && !/^[a-z]+:/i.test(path)) {
+        link.href = markdownViewerUrl(path);
+      }
+    });
+  }
+
   function renderInventory(language) {
     if (!manifest) return;
     const list = document.querySelector(".case-inventory");
@@ -300,7 +315,9 @@
 
       const link = document.createElement("a");
       link.className = "case-file-link";
-      link.href = artifact.path;
+      link.href = artifact.media_type === "text/markdown"
+        ? markdownViewerUrl(artifact.path)
+        : artifact.path;
       link.target = "_blank";
       link.rel = "noreferrer";
       link.textContent = copy[language].openFile;
@@ -346,6 +363,7 @@
 
   const savedLanguage = canStore ? localStorage.getItem("paperroach-language") : null;
   const preferredLanguage = savedLanguage || (navigator.language.toLowerCase().startsWith("ko") ? "ko" : "en");
+  upgradeMarkdownLinks();
   setLanguage(preferredLanguage);
 
   if (languageButton) {
