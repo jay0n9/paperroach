@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef3f1">
+  <meta name="description" content="Rendered Markdown output from the PaperRoach affective dynamics public case study.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../styles.css">
+  <link rel="stylesheet" href="case-study.css">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="markdown-viewer.css">
+  <script>
+    if (new URLSearchParams(window.location.search).get("embed") === "1") {
+      document.documentElement.dataset.embed = "true";
+    }
+  </script>
+  <script src="vendor/markdown-it.umd.min.js" defer></script>
+  <script src="vendor/purify.min.js" defer></script>
+  <script src="vendor/katex/katex.min.js" defer></script>
+  <script src="markdown-viewer.js" defer></script>
+  <title>PaperRoach Markdown viewer</title>
+</head>
+<body class="case-page mdv-page">
+  <a class="skip-link" href="#markdown-document">Skip to Markdown</a>
+
+  <header class="site-header mdv-site-header">
+    <a class="brand" href="./" aria-label="Back to the public case study">
+      <svg class="brand-mark" viewBox="0 0 42 42" aria-hidden="true">
+        <path d="M10 5.5h16l6 6V35H10z"/>
+        <path d="M26 5.5v7h6M15 20h12M15 25h9M8 14 4 10M34 14l4-4"/>
+      </svg>
+      <span>PaperRoach</span>
+      <span class="alpha">Markdown viewer</span>
+    </a>
+    <nav class="site-nav" aria-label="Markdown viewer navigation">
+      <a href="./#processed">Case study</a>
+      <a href="original/pellert-et-al-2020.pdf">Original PDF</a>
+    </nav>
+    <a class="github-link" href="https://github.com/jay0n9/paperroach" target="_blank" rel="noreferrer" aria-label="Open the PaperRoach repository on GitHub">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8a11.4 11.4 0 0 0-3.6 22.2c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11 11 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.1v3.1c0 .4.2.7.8.6A11.4 11.4 0 0 0 12 .8Z"/></svg>
+      <span>GitHub</span>
+    </a>
+  </header>
+
+  <div class="mdv-toolbar">
+    <div class="case-shell mdv-toolbar-inner">
+      <label class="mdv-picker" for="mdv-document-select">
+        <span>Markdown file</span>
+        <select id="mdv-document-select">
+          <optgroup label="Paper note">
+            <option value="processed/paper-note.md">Paper note · reviewed</option>
+            <option value="processed/paper-note.generated.md">Paper note · generated</option>
+          </optgroup>
+          <optgroup label="Derivative concepts">
+            <option value="derivatives/affective-dynamics-model.md">Affective Dynamics Model · reviewed</option>
+            <option value="derivatives/affective-dynamics-model.generated.md">Affective Dynamics Model · generated</option>
+            <option value="derivatives/exponential-relaxation.md">Exponential Relaxation · reviewed</option>
+            <option value="derivatives/exponential-relaxation.generated.md">Exponential Relaxation · generated</option>
+            <option value="derivatives/individual-baseline.md">Individual Baseline · reviewed</option>
+            <option value="derivatives/individual-baseline.generated.md">Individual Baseline · generated</option>
+            <option value="derivatives/regulation-effect.md">Regulation Effect · reviewed</option>
+            <option value="derivatives/regulation-effect.generated.md">Regulation Effect · generated</option>
+          </optgroup>
+          <optgroup label="Provenance">
+            <option value="ATTRIBUTION.md">Attribution &amp; licenses</option>
+            <option value="CHANGELOG.md">Review change log</option>
+            <option value="README.md">Bundle README</option>
+          </optgroup>
+        </select>
+      </label>
+
+      <div class="mdv-file-identity">
+        <span class="mdv-state" id="mdv-state">Reviewed</span>
+        <code id="mdv-path">processed/paper-note.md</code>
+      </div>
+
+      <div class="mdv-actions">
+        <a id="mdv-raw-link" href="processed/paper-note.md">Raw .md</a>
+        <a href="original/pellert-et-al-2020.pdf">Source PDF</a>
+      </div>
+    </div>
+  </div>
+
+  <main class="mdv-main" id="mdv-main">
+    <article class="mdv-document" id="markdown-document" aria-busy="true">
+      <div class="mdv-loading">
+        <span></span><span></span><span></span>
+        <p>Loading Markdown…</p>
+      </div>
+    </article>
+    <p class="mdv-status" id="mdv-status" role="status" aria-live="polite"></p>
+  </main>
+
+  <noscript>
+    <section class="case-shell mdv-noscript">
+      <h1>Markdown viewer requires JavaScript</h1>
+      <p><a href="processed/paper-note.md">Open the reviewed paper note as raw Markdown.</a></p>
+    </section>
+  </noscript>
+</body>
+</html>

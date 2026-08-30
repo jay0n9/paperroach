@@ -176,27 +176,14 @@
         </div>
 
         <div class="case-note-layout">
-          <article class="case-note-window" lang="en">
+          <div class="case-note-window" lang="en">
             <header class="case-note-bar"><span data-copy="reviewedBar">REVIEWED MARKDOWN / DEFAULT READING COPY</span><span>paper-note.md</span></header>
-            <div class="case-note-body">
-              <div class="case-frontmatter">
-                <span>type: Paper</span><span>year: 2020</span>
-                <span>domain: Affective Computing</span><span>review: source-checked</span>
-                <span>license: CC BY 4.0</span><span>kb-generated: true</span>
-              </div>
-              <h3>The individual dynamics of affective expression on social media</h3>
-              <h4 data-copy="noteTldr">TL;DR</h4>
-              <p>This paper tests a computational model of affective dynamics using Facebook status updates. Text-derived valence and arousal return exponentially toward an individual-specific baseline, while expression is associated with an immediate proportional movement toward that baseline.</p>
-              <h4 data-copy="noteApproach">Model</h4>
-              <p class="case-equation" aria-label="Expected affective state equation">E[xᵢ(t+Δt)] = e<sup>−γΔt</sup>(xᵢ(t)−μᵢ)+μᵢ</p>
-              <h4 data-copy="noteResults">Reported fit</h4>
-              <div class="case-result-line" aria-label="Reported fit values">
-                <span>kᵥ = 0.38</span><span>kₐ = 0.45</span><span>γᵥ = 0.0070 s⁻¹</span><span>γₐ = 0.0105 s⁻¹</span>
-              </div>
-              <h4 data-copy="noteLimits">Review boundary</h4>
-              <p data-copy="noteLimitsBody">The reviewed note describes text-derived affective expression and avoids turning an observational coefficient into a causal or clinical claim.</p>
-            </div>
-          </article>
+            <iframe
+              class="case-markdown-embed"
+              src="markdown-viewer.html?file=processed%2Fpaper-note.md&amp;embed=1"
+              title="Rendered source-checked PaperRoach Markdown note"
+            ></iframe>
+          </div>
 
           <aside class="case-review-ledger">
             <h3 data-copy="reviewTitle">What review changed</h3>
