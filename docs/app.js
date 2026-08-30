@@ -15,7 +15,7 @@ const copy = {
     heroTitle: "This one PDF produced one paper note and four concept notes.",
     heroLede: "Open the unchanged 14-page input, the publication-sanitized machine draft generated from it, and all four derivative drafts from that local run. Source-checked copies and corrections stay public beside them.",
     heroDemoBadge: "ONE LOCAL RUN",
-    heroDemoTitle: "Generated lineage above. Source-checked view below.",
+    heroDemoTitle: "Scroll the lineage. Inspect each real file below.",
     heroDemoOpen: "Inspect full case ↗",
     startInstall: "Start installing",
     fullGuide: "Read the full guide",
@@ -23,7 +23,13 @@ const copy = {
     trustZotero: "Zotero stays read-only",
     trustLicense: "MIT licensed",
     stageLabel: "ACTUAL GENERATED LINEAGE / PUBLIC CASE",
-    stageLocal: "FILES ARE PUBLIC",
+    lineageScrollSource: "01 / PDF ↓",
+    lineageScrollNote: "02 / PAPER NOTE ↓",
+    lineageScrollConcepts: "03 / CONCEPT NOTES",
+    lineageScrollAll: "PDF → NOTE → CONCEPTS",
+    lineageScrollInstruction: "Scroll to reveal the paper note, then its concept notes.",
+    lineageStaticInstruction: "The source PDF, paper note, and concept notes are all shown below.",
+    lineageAllInstruction: "All three artifact stages are visible because reduced motion is enabled.",
     lineageLabel: "Actual artifact lineage: source PDF to paper note to four concept notes",
     lineageSource: "SOURCE PDF",
     lineageSourceName: "Unchanged article",
@@ -137,7 +143,7 @@ const copy = {
     heroTitle: "이 PDF 한 편에서 정리 노트 한 개와 개념 노트 네 개가 나왔습니다.",
     heroLede: "한 번의 로컬 실행에 사용한 변경 없는 14쪽 원문과, 그 실행에서 생성된 공개용 Markdown 및 네 개의 파생 초안을 직접 열어보세요. 원문 대조본과 수정 내역도 함께 공개합니다.",
     heroDemoBadge: "로컬 실행 1회",
-    heroDemoTitle: "위에는 실제 생성 계보, 아래에는 원문 대조본을 보여줍니다.",
+    heroDemoTitle: "스크롤로 계보를 따라가며 실제 파일을 아래에서 확인하세요.",
     heroDemoOpen: "전체 사례 살펴보기 ↗",
     startInstall: "설치 시작하기",
     fullGuide: "전체 가이드 읽기",
@@ -145,7 +151,13 @@ const copy = {
     trustZotero: "Zotero 읽기 전용",
     trustLicense: "MIT 라이선스",
     stageLabel: "실제 생성 계보 / 공개 사례",
-    stageLocal: "전체 파일 공개",
+    lineageScrollSource: "01 / PDF ↓",
+    lineageScrollNote: "02 / 정리 노트 ↓",
+    lineageScrollConcepts: "03 / 개념 노트",
+    lineageScrollAll: "PDF → 정리 노트 → 개념 노트",
+    lineageScrollInstruction: "스크롤하면 정리 노트와 파생 개념 노트가 차례로 나타납니다.",
+    lineageStaticInstruction: "원문 PDF, 정리 노트, 파생 개념 노트를 모두 표시합니다.",
+    lineageAllInstruction: "모션 감소 설정에 따라 세 산출물 단계를 모두 표시합니다.",
     lineageLabel: "실제 산출물 연결: 원문 PDF에서 정리 노트와 네 개의 개념 노트까지",
     lineageSource: "원문 PDF",
     lineageSourceName: "원문 그대로",
@@ -284,6 +296,7 @@ function setLanguage(language) {
     ? "PaperRoach — 로컬 우선 논문 지식"
     : "PaperRoach — Local-first paper knowledge";
   updateLineagePreviewCopy();
+  updateLineageScrollCopy();
   if (canStore) localStorage.setItem("paperroach-language", next);
 }
 
@@ -350,7 +363,23 @@ const lineagePdfPreview = document.querySelector(".lineage-pdf-preview");
 const lineagePath = document.querySelector("[data-lineage-path]");
 const lineageOpen = document.querySelector("[data-lineage-open]");
 const lineageDraft = document.querySelector("[data-lineage-draft-link]");
+const lineageScroll = document.querySelector("[data-lineage-scroll]");
+const lineageStage = document.querySelector(".landing-demo-stage");
+const lineageStageGroups = [
+  document.querySelector(".lineage-source-stage"),
+  document.querySelector(".lineage-note-stage"),
+  document.querySelector(".lineage-concept-stage"),
+];
+const lineageStepNodes = [
+  document.querySelector(".lineage-source-node"),
+  document.querySelector(".lineage-note-node"),
+  document.querySelector(".lineage-concept-list button"),
+];
+const lineageCompactQuery = window.matchMedia("(max-width: 760px)");
+const lineageReducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const caseRoot = "examples/affective-dynamics/";
+let activeLineageScrollStep = -1;
+let lineageScrollFrame = 0;
 
 function lineageViewerUrl(path, embedded = false) {
   const params = new URLSearchParams({ file: path });
@@ -371,6 +400,35 @@ function updateLineagePreviewCopy() {
   if (!frame.hidden && name) {
     frame.title = `${name} — ${copy[language].lineageFrameSuffix}`;
   }
+}
+
+function updateLineageScrollCopy() {
+  const stage = document.querySelector("[data-lineage-step]");
+  const label = document.querySelector("[data-lineage-scroll-label]");
+  const instruction = document.querySelector("#lineage-scroll-instruction");
+  if (!stage || !label || !instruction) return;
+  const stepKeys = {
+    source: "lineageScrollSource",
+    note: "lineageScrollNote",
+    concepts: "lineageScrollConcepts",
+    all: "lineageScrollAll",
+  };
+  const ready = stage.classList.contains("is-scroll-ready");
+  const key = ready
+    ? stepKeys[stage.dataset.lineageStep] || stepKeys.source
+    : stepKeys.all;
+  const language = root.dataset.language || "en";
+  label.dataset.copy = key;
+  label.textContent = copy[language][key];
+  label.lang = language;
+  const instructionKey = !ready
+    ? "lineageStaticInstruction"
+    : stage.dataset.lineageStep === "all"
+      ? "lineageAllInstruction"
+      : "lineageScrollInstruction";
+  instruction.dataset.copy = instructionKey;
+  instruction.textContent = copy[language][instructionKey];
+  instruction.lang = language;
 }
 
 function selectLineageArtifact(node, focus = false) {
@@ -406,19 +464,121 @@ function selectLineageArtifact(node, focus = false) {
   if (focus) node.focus();
 }
 
-lineageNodes.forEach((node, index) => {
-  node.addEventListener("click", () => selectLineageArtifact(node));
+lineageNodes.forEach((node) => {
+  node.addEventListener("click", () => {
+    alignLineageStepWithNode(node);
+    selectLineageArtifact(node);
+  });
   node.addEventListener("keydown", (event) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
+    const availableNodes = lineageNodes.filter((candidate) => !candidate.closest("[inert]"));
+    const index = availableNodes.indexOf(node);
     let nextIndex = index;
-    if (event.key === "ArrowLeft") nextIndex = (index - 1 + lineageNodes.length) % lineageNodes.length;
-    if (event.key === "ArrowRight") nextIndex = (index + 1) % lineageNodes.length;
+    if (event.key === "ArrowLeft") nextIndex = (index - 1 + availableNodes.length) % availableNodes.length;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % availableNodes.length;
     if (event.key === "Home") nextIndex = 0;
-    if (event.key === "End") nextIndex = lineageNodes.length - 1;
-    selectLineageArtifact(lineageNodes[nextIndex], true);
+    if (event.key === "End") nextIndex = availableNodes.length - 1;
+    const nextNode = availableNodes[nextIndex];
+    alignLineageStepWithNode(nextNode);
+    selectLineageArtifact(nextNode, true);
   });
 });
+
+function setLineageStageAvailability(stepIndex, revealAll = false) {
+  lineageStageGroups.forEach((group, index) => {
+    const unavailable = !revealAll && (
+      lineageCompactQuery.matches ? index !== stepIndex : index > stepIndex
+    );
+    group.toggleAttribute("inert", unavailable);
+    if (unavailable) group.setAttribute("aria-hidden", "true");
+    else group.removeAttribute("aria-hidden");
+  });
+}
+
+function setLineageScrollStep(stepIndex, force = false, selectDefault = true) {
+  const boundedStep = Math.max(0, Math.min(lineageStepNodes.length - 1, stepIndex));
+  const changed = boundedStep !== activeLineageScrollStep;
+  if (!changed && !force) return;
+  activeLineageScrollStep = boundedStep;
+  lineageStage.dataset.lineageStep = ["source", "note", "concepts"][boundedStep];
+  setLineageStageAvailability(boundedStep);
+  updateLineageScrollCopy();
+  const selectedNode = document.querySelector("[data-lineage-file].is-selected");
+  const selectionUnavailable = !selectedNode || Boolean(selectedNode.closest("[inert]"));
+  if (selectDefault && (changed || selectionUnavailable)) {
+    selectLineageArtifact(lineageStepNodes[boundedStep]);
+  }
+}
+
+function lineageStepIndexForNode(node) {
+  return lineageStageGroups.findIndex((group) => group.contains(node));
+}
+
+function scrollLineageToStep(stepIndex) {
+  const stageTop = Number.parseFloat(getComputedStyle(lineageStage).top) || 0;
+  const scrollSpan = Math.max(1, lineageScroll.offsetHeight - lineageStage.offsetHeight);
+  const wrapperTop = window.scrollY + lineageScroll.getBoundingClientRect().top;
+  const targetProgress = [.05, .5, .85][stepIndex];
+  const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+  document.documentElement.style.scrollBehavior = "auto";
+  window.scrollTo({
+    top: wrapperTop - stageTop + scrollSpan * targetProgress,
+    behavior: "auto",
+  });
+  document.documentElement.style.scrollBehavior = previousScrollBehavior;
+}
+
+function alignLineageStepWithNode(node) {
+  if (lineageReducedMotionQuery.matches) return;
+  const targetStep = lineageStepIndexForNode(node);
+  if (targetStep < 0 || targetStep === activeLineageScrollStep) return;
+  setLineageScrollStep(targetStep, true, false);
+  scrollLineageToStep(targetStep);
+}
+
+function updateLineageFromScroll(force = false) {
+  const reducedMotion = lineageReducedMotionQuery.matches;
+  lineageScroll.classList.add("is-scroll-ready");
+  lineageScroll.classList.toggle("is-reduced-motion", reducedMotion);
+  lineageStage.classList.toggle("is-reduced-motion", reducedMotion);
+  lineageStage.classList.add("is-scroll-ready");
+
+  if (reducedMotion) {
+    activeLineageScrollStep = -1;
+    lineageStage.dataset.lineageStep = "all";
+    setLineageStageAvailability(0, true);
+    updateLineageScrollCopy();
+    return;
+  }
+
+  const stageTop = Number.parseFloat(getComputedStyle(lineageStage).top) || 0;
+  const scrollSpan = Math.max(1, lineageScroll.offsetHeight - lineageStage.offsetHeight);
+  const progress = Math.max(0, Math.min(1, (stageTop - lineageScroll.getBoundingClientRect().top) / scrollSpan));
+  const stepIndex = progress < .34 ? 0 : progress < .67 ? 1 : 2;
+  setLineageScrollStep(stepIndex, force);
+}
+
+function queueLineageScrollUpdate() {
+  if (lineageScrollFrame) return;
+  lineageScrollFrame = window.requestAnimationFrame(() => {
+    lineageScrollFrame = 0;
+    updateLineageFromScroll();
+  });
+}
+
+window.addEventListener("scroll", queueLineageScrollUpdate, { passive: true });
+window.addEventListener("resize", queueLineageScrollUpdate);
+
+function watchLineageMediaQuery(query) {
+  const listener = () => updateLineageFromScroll(true);
+  if (typeof query.addEventListener === "function") query.addEventListener("change", listener);
+  else if (typeof query.addListener === "function") query.addListener(listener);
+}
+
+watchLineageMediaQuery(lineageCompactQuery);
+watchLineageMediaQuery(lineageReducedMotionQuery);
+updateLineageFromScroll(true);
 
 window.addEventListener("message", (event) => {
   if (
@@ -430,14 +590,6 @@ window.addEventListener("message", (event) => {
 
   const node = lineageNodes.find((candidate) => candidate.dataset.lineageFile === event.data.path);
   if (!node) return;
-  lineageNodes.forEach((candidate) => {
-    const selected = candidate === node;
-    candidate.classList.toggle("is-selected", selected);
-    candidate.setAttribute("aria-pressed", String(selected));
-  });
-  lineagePath.textContent = node.dataset.lineageFile;
-  lineageOpen.href = lineageViewerUrl(node.dataset.lineageFile);
-  lineageDraft.href = lineageViewerUrl(node.dataset.lineageDraft);
-  lineageDraft.hidden = false;
-  updateLineagePreviewCopy();
+  alignLineageStepWithNode(node);
+  selectLineageArtifact(node);
 });

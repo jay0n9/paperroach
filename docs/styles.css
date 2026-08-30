@@ -230,7 +230,7 @@ html[data-language="ko"] .toggle-track span {
   min-height: calc(100vh - 76px);
   margin: 0 auto;
   padding: clamp(72px, 8vw, 132px) clamp(22px, 5vw, 88px) clamp(62px, 7vw, 110px);
-  align-items: center;
+  align-items: start;
 }
 
 .hero-copy {
@@ -419,12 +419,31 @@ h1 {
   box-shadow: 0 0 0 4px rgb(5 117 104 / 14%);
 }
 
+.landing-demo-scroll {
+  --lineage-stage-height: clamp(720px, 78vh, 800px);
+  position: relative;
+  min-width: 0;
+  height: var(--lineage-stage-height);
+}
+
+.landing-demo-scroll.is-scroll-ready:not(.is-reduced-motion) {
+  height: calc(var(--lineage-stage-height) + 120vh);
+}
+
 .landing-demo-stage {
+  position: relative;
+  top: auto;
   display: grid;
-  height: clamp(720px, 78vh, 800px);
-  min-height: 720px;
+  width: 100%;
+  height: var(--lineage-stage-height);
+  min-height: var(--lineage-stage-height);
   grid-template-rows: 43px auto auto minmax(0, 1fr) auto;
   overflow: hidden;
+}
+
+.landing-demo-scroll.is-scroll-ready:not(.is-reduced-motion) .landing-demo-stage {
+  position: sticky;
+  top: 24px;
 }
 
 .landing-demo-meta {
@@ -477,6 +496,16 @@ h1 {
   white-space: nowrap;
 }
 
+.lineage-noscript {
+  display: block;
+  max-width: 48ch;
+  margin-top: 7px;
+  color: var(--zotero);
+  font-family: var(--mono);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
 .landing-demo-open {
   display: inline-flex;
   min-height: 38px;
@@ -514,6 +543,36 @@ h1 {
 .lineage-stage {
   position: relative;
   min-width: 0;
+}
+
+.landing-demo-stage.is-scroll-ready .lineage-stage {
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease,
+    visibility 320ms step-start;
+}
+
+.landing-demo-stage.is-scroll-ready[data-lineage-step="source"] .lineage-note-stage,
+.landing-demo-stage.is-scroll-ready[data-lineage-step="source"] .lineage-concept-stage,
+.landing-demo-stage.is-scroll-ready[data-lineage-step="note"] .lineage-concept-stage {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(14px);
+  transition-timing-function: ease, ease, step-end;
+}
+
+.landing-demo-stage.is-scroll-ready[data-lineage-step="note"] .lineage-source-stage,
+.landing-demo-stage.is-scroll-ready[data-lineage-step="concepts"] .lineage-source-stage,
+.landing-demo-stage.is-scroll-ready[data-lineage-step="concepts"] .lineage-note-stage {
+  opacity: .34;
+}
+
+@media (min-width: 1121px) {
+  .hero-copy {
+    position: sticky;
+    top: clamp(72px, 18vh, 180px);
+    margin-top: clamp(52px, 8vh, 96px);
+  }
 }
 
 .lineage-stage:not(:last-child)::after {
@@ -2018,9 +2077,56 @@ html[data-language="ko"] h1 {
     display: none;
   }
 
+  .landing-demo-scroll {
+    --lineage-stage-height: clamp(620px, calc(100svh - 24px), 760px);
+    width: 100%;
+    height: var(--lineage-stage-height);
+  }
+
+  .landing-demo-scroll.is-scroll-ready:not(.is-reduced-motion) {
+    height: calc(var(--lineage-stage-height) + 100svh);
+  }
+
   .landing-demo-stage {
-    height: 690px;
-    min-height: 690px;
+    height: var(--lineage-stage-height);
+    min-height: var(--lineage-stage-height);
+  }
+
+  .landing-demo-scroll.is-scroll-ready:not(.is-reduced-motion) .landing-demo-stage {
+    top: 12px;
+  }
+
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion) .artifact-lineage {
+    display: block;
+  }
+
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion) .lineage-stage {
+    display: none;
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+  }
+
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion)[data-lineage-step="source"] .lineage-source-stage,
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion)[data-lineage-step="note"] .lineage-note-stage,
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion)[data-lineage-step="concepts"] .lineage-concept-stage {
+    display: block;
+  }
+
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion) .lineage-stage::after {
+    display: none;
+  }
+
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion) .lineage-node {
+    min-height: clamp(112px, 17svh, 145px);
+  }
+
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion) .lineage-source-thumb {
+    height: clamp(42px, 7svh, 62px);
+  }
+
+  .landing-demo-stage.is-scroll-ready:not(.is-reduced-motion) .lineage-concept-list button {
+    min-height: 44px;
   }
 
   .landing-demo-meta {
@@ -2272,9 +2378,8 @@ html[data-language="ko"] h1 {
 }
 
 @media (max-width: 560px) {
-  .landing-demo-stage {
-    height: 860px;
-    min-height: 860px;
+  .landing-demo-scroll {
+    --lineage-stage-height: clamp(580px, calc(100svh - 24px), 760px);
   }
 
   .landing-demo-meta {
@@ -2451,6 +2556,21 @@ html[data-language="ko"] h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .landing-demo-scroll.is-reduced-motion {
+    height: var(--lineage-stage-height);
+  }
+
+  .landing-demo-stage.is-reduced-motion {
+    position: relative;
+    top: auto;
+  }
+
+  .landing-demo-stage.is-scroll-ready.is-reduced-motion .lineage-stage {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+  }
+
   html {
     scroll-behavior: auto;
   }

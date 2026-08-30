@@ -72,18 +72,21 @@
 
   <main id="main">
     <section class="hero" id="top">
-      <section class="pipeline-stage landing-demo-stage" id="live-demo" aria-labelledby="landing-demo-title">
+      <div class="landing-demo-scroll" data-lineage-scroll>
+      <section class="pipeline-stage landing-demo-stage" id="live-demo" aria-labelledby="landing-demo-title" aria-describedby="lineage-scroll-instruction" data-lineage-step="source">
         <div class="stage-topbar">
           <span data-copy="stageLabel">ACTUAL GENERATED LINEAGE / PUBLIC CASE</span>
-          <span class="stage-state"><span></span><span data-copy="stageLocal">FILES ARE PUBLIC</span></span>
+          <span class="stage-state"><span></span><span data-lineage-scroll-label data-copy="lineageScrollAll">PDF → NOTE → CONCEPTS</span></span>
+          <span class="sr-only" id="lineage-scroll-instruction" data-copy="lineageStaticInstruction">The source PDF, paper note, and concept notes are all shown below.</span>
         </div>
 
         <div class="landing-demo-meta">
           <div class="landing-demo-identity">
             <span class="landing-demo-badge" data-copy="heroDemoBadge">ONE LOCAL RUN</span>
             <div>
-              <strong id="landing-demo-title" data-copy="heroDemoTitle">Generated lineage above. Source-checked view below.</strong>
+              <strong id="landing-demo-title" data-copy="heroDemoTitle">Inspect the real PDF, paper note, and concept notes.</strong>
               <code>1 PDF → 1 paper note → 4 concept notes</code>
+              <noscript><small class="lineage-noscript">Interactive preview requires JavaScript. Use “Inspect full case” to open every artifact.</small></noscript>
             </div>
           </div>
           <a class="landing-demo-open" href="examples/affective-dynamics/" data-copy="heroDemoOpen">Inspect full case ↗</a>
@@ -92,12 +95,12 @@
         <ol class="artifact-lineage" aria-label="Actual artifact lineage" data-label-copy="lineageLabel">
           <li class="lineage-stage lineage-source-stage">
             <button
-              class="lineage-node lineage-source-node"
+              class="lineage-node lineage-source-node is-selected"
               type="button"
               data-lineage-kind="pdf"
               data-lineage-file="original/pellert-et-al-2020.pdf"
               data-lineage-status-copy="lineageStatusSource"
-              aria-pressed="false"
+              aria-pressed="true"
             >
               <span class="lineage-node-index"><span>01</span><span data-copy="lineageSource">SOURCE PDF</span></span>
               <span class="lineage-source-thumb"><img src="examples/affective-dynamics/previews/source-page-1.jpg" alt="" loading="eager"></span>
@@ -109,13 +112,13 @@
 
           <li class="lineage-stage lineage-note-stage">
             <button
-              class="lineage-node lineage-note-node is-selected"
+              class="lineage-node lineage-note-node"
               type="button"
               data-lineage-kind="markdown"
               data-lineage-file="processed/paper-note.md"
               data-lineage-draft="processed/paper-note.generated.md"
               data-lineage-status-copy="lineageStatusReviewed"
-              aria-pressed="true"
+              aria-pressed="false"
             >
               <span class="lineage-node-index"><span>02</span><span data-copy="lineagePaperNote">PAPER NOTE</span></span>
               <strong class="lineage-node-name" data-copy="lineagePaperNoteName">Generated paper-note draft</strong>
@@ -160,21 +163,22 @@
         <section class="lineage-preview" aria-label="Selected artifact preview" data-label-copy="lineagePreviewLabel">
           <header class="lineage-preview-bar" aria-live="polite">
             <div>
-              <span class="lineage-preview-state" data-lineage-status>SOURCE-CHECKED COPY</span>
-              <code data-lineage-path>processed/paper-note.md</code>
+              <span class="lineage-preview-state" data-lineage-status>UNCHANGED SOURCE</span>
+              <code data-lineage-path>original/pellert-et-al-2020.pdf</code>
             </div>
             <nav aria-label="Selected artifact actions" data-label-copy="lineageActionsLabel">
-              <a data-lineage-draft-link href="examples/affective-dynamics/markdown-viewer.html?file=processed%2Fpaper-note.generated.md" target="_blank" rel="noreferrer" data-copy="lineageOpenDraft">Generated draft ↗</a>
-              <a data-lineage-open href="examples/affective-dynamics/markdown-viewer.html?file=processed%2Fpaper-note.md" target="_blank" rel="noreferrer" data-copy="lineageOpenFile">Open file ↗</a>
+              <a data-lineage-draft-link href="examples/affective-dynamics/markdown-viewer.html?file=processed%2Fpaper-note.generated.md" target="_blank" rel="noreferrer" data-copy="lineageOpenDraft" hidden>Generated draft ↗</a>
+              <a data-lineage-open href="examples/affective-dynamics/original/pellert-et-al-2020.pdf" target="_blank" rel="noreferrer" data-copy="lineageOpenFile">Open file ↗</a>
             </nav>
           </header>
           <div class="lineage-preview-surface">
-            <a class="lineage-pdf-preview" href="examples/affective-dynamics/original/pellert-et-al-2020.pdf" target="_blank" rel="noreferrer" aria-label="Open the unchanged source PDF" data-label-copy="lineagePdfPreviewLabel" hidden>
+            <a class="lineage-pdf-preview" href="examples/affective-dynamics/original/pellert-et-al-2020.pdf" target="_blank" rel="noreferrer" aria-label="Open the unchanged source PDF" data-label-copy="lineagePdfPreviewLabel">
               <img src="examples/affective-dynamics/previews/source-page-1.jpg" alt="">
             </a>
             <iframe
-              src="examples/affective-dynamics/markdown-viewer.html?file=processed%2Fpaper-note.md&amp;embed=1"
               title="Organized paper note — source-checked Markdown preview"
+              loading="lazy"
+              hidden
             ></iframe>
           </div>
         </section>
@@ -193,6 +197,7 @@
           </nav>
         </footer>
       </section>
+      </div>
 
       <div class="hero-copy">
         <p class="eyebrow"><span class="status-dot"></span><span data-copy="eyebrow">Local-first research pipeline</span></p>
