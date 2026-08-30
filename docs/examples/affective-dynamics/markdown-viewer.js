@@ -273,7 +273,10 @@
       }
 
       link.href = resolved.href;
-      if (resolved.origin !== window.location.origin) link.rel = "noopener noreferrer";
+      if (resolved.origin !== window.location.origin) {
+        link.rel = "noopener noreferrer";
+        if (embedded) link.target = "_blank";
+      }
     });
   }
 
