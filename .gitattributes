@@ -1,3 +1,4 @@
 docs/examples/affective-dynamics/** text eol=lf
 docs/examples/affective-dynamics/original/*.pdf binary -eol
 docs/examples/affective-dynamics/vendor/katex/fonts/* binary -eol
+docs/examples/affective-dynamics/previews/* binary -eol
